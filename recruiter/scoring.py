@@ -72,16 +72,18 @@ def candidate_text(candidate: dict) -> str:
     parts = [
         candidate.get("name", ""),
         candidate.get("headline", ""),
+        candidate.get("experience", ""),
         candidate.get("raw_text", ""),
     ]
     return "\n".join(p for p in parts if p)
 
 
 def matches_target(candidate: dict, config: Optional[dict] = None) -> bool:
-    """True if the candidate fits the target filter (grad year + school)."""
-    cfg = (config or load_config())["target"]
-    if candidate.get("grad_year") != cfg["grad_year"]:
-        return False
-    school = (candidate.get("school") or "") + " " + (candidate.get("headline") or "")
-    school = school.lower()
-    return any(k.lower() in school for k in cfg["school_keywords"])
+    """True if the candidate is a verified incoming CMU Class of 2030 student.
+
+    Delegates to the verification module, which requires CMU + 2030 to co-occur
+    in the same education entry (or the person's own headline) rather than just
+    appearing somewhere on the page. See recruiter/verification.py.
+    """
+    from .verification import passes
+    return passes(candidate, config)

@@ -24,6 +24,19 @@ target:
     - "cmu"
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Auto-discovery: find candidate profiles on LinkedIn instead of supplying URLs.
+# Opens CMU's alumni/people page in your authenticated session, types `keyword`
+# into the alumni search box, scrolls, and collects profile links. See discover.py.
+#
+# ⚠️ This is the most ban-prone, most fragile part. Keep max_profiles modest.
+# ─────────────────────────────────────────────────────────────────────────────
+discovery:
+  school_people_url: "https://www.linkedin.com/school/carnegie-mellon-university/people/"
+  keyword: "Class of 2030"       # typed into the alumni search/keyword box
+  max_profiles: 50               # hard cap per run (stay under the radar)
+  max_scrolls: 25                # how many times to scroll for more results
+
+# ─────────────────────────────────────────────────────────────────────────────
 # ATS scoring. Total is capped at 100.
 #
 # For each category we scan the candidate's text for keywords. Each matched

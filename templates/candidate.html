@@ -4,6 +4,26 @@
 
 <a href="{{ url_for('index') }}" class="back">← All candidates</a>
 
+{% set vok = verdict.status in ('verified', 'headline', 'provided') %}
+<div class="verify-banner {{ 'ok' if vok else 'bad' }}">
+  <div class="vb-head">
+    {% if verdict.status in ('verified', 'headline') %}
+      ✓ Confirmed: Carnegie Mellon University, Class of 2030
+    {% elif verdict.status == 'provided' %}
+      ℹ Imported as CMU Class of 2030 (not independently verified)
+    {% elif verdict.status == 'mismatch' %}
+      ✗ Not a match — {{ verdict.reason }}
+    {% else %}
+      ✗ Unverified — {{ verdict.reason }}
+    {% endif %}
+  </div>
+  {% if verdict.evidence %}
+    <div class="vb-evidence">
+      Evidence ({{ verdict.source }}): <code>{{ verdict.evidence }}</code>
+    </div>
+  {% endif %}
+</div>
+
 <div class="profile">
   <div class="profile-head">
     <h1>{{ c.name }}</h1>
@@ -17,10 +37,44 @@
     {% if c.location %}📍 {{ c.location }}{% endif %}
     {% if c.grad_year %} · 🎓 Class of {{ c.grad_year }}{% endif %}
     {% if c.school %} · {{ c.school }}{% endif %}
-    {% if c.email %} · ✉️ {{ c.email }}{% endif %}
-    {% if c.profile_url and 'http' in c.profile_url %} · <a href="{{ c.profile_url }}" target="_blank">profile</a>{% endif %}
+    {% if c.email %} · ✉️ <a href="mailto:{{ c.email }}">{{ c.email }}</a>{% endif %}
   </p>
+  {% if c.profile_url and 'http' in c.profile_url %}
+    <a class="li-button" href="{{ c.profile_url }}" target="_blank" rel="noopener">
+      🔗 View LinkedIn profile ↗
+    </a>
+  {% endif %}
 </div>
+
+<section class="card education">
+  <h2>Education</h2>
+  {% if c.education %}
+    <ul class="exp-list">
+      {% for line in c.education.split('\n') %}
+        {% set item = line.lstrip('• ').strip() %}
+        {% if item %}<li>{{ item }}</li>{% endif %}
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">No education captured — can't confirm CMU class of 2030.</p>
+  {% endif %}
+</section>
+
+<section class="card experience">
+  <h2>Previous experience</h2>
+  {% if c.experience %}
+    <ul class="exp-list">
+      {% for line in c.experience.split('\n') %}
+        {% set item = line.lstrip('• ').strip() %}
+        {% if item %}<li>{{ item }}</li>{% endif %}
+      {% endfor %}
+    </ul>
+  {% elif c.raw_text %}
+    <p>{{ c.raw_text }}</p>
+  {% else %}
+    <p class="muted">No experience captured for this candidate.</p>
+  {% endif %}
+</section>
 
 <div class="columns">
   <section class="card">

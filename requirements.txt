@@ -1,13 +1,11 @@
 # Core
 PyYAML>=6.0
 
-# Scraper
+# Scraper — Playwright renders JS so the authenticated LinkedIn session works.
+# After installing, run once:  playwright install chromium
 Scrapy>=2.11
+playwright>=1.40
+scrapy-playwright>=0.0.34
 
 # Dashboard
 Flask>=3.0
-
-# Nice-to-have for LinkedIn (JS-rendered pages need a real browser session).
-# Optional — only needed if you actually attempt LinkedIn scraping.
-# playwright>=1.40
-# scrapy-playwright>=0.0.34

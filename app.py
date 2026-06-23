@@ -15,7 +15,7 @@ import json
 
 from flask import Flask, redirect, render_template, request, url_for, Response
 
-from recruiter import db
+from recruiter import db, verification
 from recruiter.config import load_config
 
 app = Flask(__name__)
@@ -45,7 +45,9 @@ def candidate(cid):
         return "Not found", 404
     cand = dict(row)
     cand["breakdown"] = json.loads(cand["breakdown"]) if cand.get("breakdown") else None
-    return render_template("candidate.html", c=cand)
+    # Recompute verification so we can show the supporting evidence + reason.
+    verdict = verification.verify_candidate(cand)
+    return render_template("candidate.html", c=cand, verdict=verdict)
 
 
 @app.route("/candidate/<int:cid>/status", methods=["POST"])

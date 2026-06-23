@@ -28,6 +28,9 @@ CREATE TABLE IF NOT EXISTS candidates (
     email        TEXT,
     grad_year    INTEGER,
     school       TEXT,
+    education    TEXT,            -- structured education entries (one per line)
+    verified     TEXT,            -- verification status (see verification.py)
+    experience   TEXT,            -- human-readable summary of prior experience
     raw_text     TEXT,            -- concatenated about/experience/education
     source       TEXT,            -- linkedin | csv | form | sample
     created_at   TEXT DEFAULT (datetime('now'))
@@ -70,18 +73,19 @@ def init_db(path: str | None = None) -> None:
 def upsert_candidate(conn: sqlite3.Connection, c: dict) -> int:
     """Insert a candidate (or update if profile_url already seen). Returns id."""
     cols = ("name", "headline", "location", "profile_url", "email",
-            "grad_year", "school", "raw_text", "source")
+            "grad_year", "school", "education", "experience", "raw_text", "source")
     row = {k: c.get(k) for k in cols}
     cur = conn.execute(
         """
         INSERT INTO candidates (name, headline, location, profile_url, email,
-                                grad_year, school, raw_text, source)
+                                grad_year, school, education, experience, raw_text, source)
         VALUES (:name, :headline, :location, :profile_url, :email,
-                :grad_year, :school, :raw_text, :source)
+                :grad_year, :school, :education, :experience, :raw_text, :source)
         ON CONFLICT(profile_url) DO UPDATE SET
             name=excluded.name, headline=excluded.headline,
             location=excluded.location, email=COALESCE(excluded.email, candidates.email),
             grad_year=excluded.grad_year, school=excluded.school,
+            education=excluded.education, experience=excluded.experience,
             raw_text=excluded.raw_text, source=excluded.source
         """,
         row,
@@ -92,6 +96,20 @@ def upsert_candidate(conn: sqlite3.Connection, c: dict) -> int:
         "SELECT id FROM candidates WHERE profile_url = ?", (row["profile_url"],)
     ).fetchone()
     return got["id"]
+
+
+def update_verification(conn: sqlite3.Connection, candidate_id: int, status: str,
+                        grad_year: Optional[int], school: Optional[str]) -> None:
+    """Store a verification verdict. grad_year/school only overwrite when the
+    verifier actually found a value (COALESCE keeps imported data otherwise)."""
+    conn.execute(
+        """UPDATE candidates
+           SET verified = ?,
+               grad_year = COALESCE(?, grad_year),
+               school = COALESCE(?, school)
+           WHERE id = ?""",
+        (status, grad_year, school, candidate_id),
+    )
 
 
 def save_score(conn: sqlite3.Connection, candidate_id: int, total: int,

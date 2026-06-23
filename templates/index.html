@@ -35,7 +35,20 @@
           {{ score }}
         </span>
       </td>
-      <td><a href="{{ url_for('candidate', cid=r.id) }}">{{ r.name }}</a></td>
+      <td>
+        <a href="{{ url_for('candidate', cid=r.id) }}">{{ r.name }}</a>
+        {% if r.profile_url and 'linkedin.com' in r.profile_url %}
+          <a class="li-link" href="{{ r.profile_url }}" target="_blank" rel="noopener"
+             title="Open LinkedIn profile">in↗</a>
+        {% endif %}
+        {% if r.verified in ('verified', 'headline') %}
+          <span class="vbadge ok" title="CMU class of 2030 confirmed on profile">✓ CMU '30</span>
+        {% elif r.verified == 'provided' %}
+          <span class="vbadge prov" title="From import; not independently verified">imported</span>
+        {% elif r.verified in ('mismatch', 'unverified') %}
+          <span class="vbadge bad" title="Not a confirmed CMU class of 2030 student">✗ not CMU '30</span>
+        {% endif %}
+      </td>
       <td class="muted small">{{ r.headline or '' }}</td>
       <td class="small">
         {% if r.breakdown %}
