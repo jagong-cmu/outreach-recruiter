@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Outreach Recruiter{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <a href="{{ url_for('index') }}" class="brand">📣 Outreach Recruiter</a>
+    <nav>
+      <a href="{{ url_for('index') }}">Candidates</a>
+      <a href="{{ url_for('export_approved') }}">Export approved CSV</a>
+    </nav>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer>
+    Drafts are for your review only — nothing is sent automatically.
+  </footer>
+</body>
+</html>

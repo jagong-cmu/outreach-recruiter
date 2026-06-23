@@ -1,0 +1,119 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Outreach Recruiter — configuration
+# Everything tunable lives here: club info, target filter, scoring weights,
+# keyword dictionaries, and the email template. Edit freely.
+# ─────────────────────────────────────────────────────────────────────────────
+
+club:
+  name: "Outreach Committee"
+  org: "Your Club Name"          # e.g. "ACM @ CMU"
+  sender_name: "Your Name"
+  sender_email: "you@andrew.cmu.edu"
+  reply_to: "you@andrew.cmu.edu"
+  # One or two sentences about what the committee does. Used in email drafts.
+  pitch: >-
+    We run the outreach and marketing efforts for our club — organizing events,
+    growing our community, and telling our story across campus and social media.
+
+# Who counts as a candidate. The scraper / importers tag each candidate with a
+# grad_year and school; anything not matching is filtered out before scoring.
+target:
+  grad_year: 2030
+  school_keywords:               # any of these (case-insensitive) marks CMU
+    - "carnegie mellon"
+    - "cmu"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ATS scoring. Total is capped at 100.
+#
+# For each category we scan the candidate's text for keywords. Each matched
+# keyword adds its points; the category total is capped at the category weight.
+# Tune the weights so that "a few strong signals" gets near the cap.
+# ─────────────────────────────────────────────────────────────────────────────
+scoring:
+  categories:
+    outreach:
+      weight: 50
+      keywords:
+        "community service": 14
+        "community outreach": 16
+        "outreach": 14
+        "volunteer": 10
+        "volunteering": 10
+        "nonprofit": 10
+        "non-profit": 10
+        "fundraising": 12
+        "fundraiser": 12
+        "charity": 10
+        "event planning": 12
+        "event organizer": 12
+        "organized event": 12
+        "service club": 10
+        "key club": 12
+        "national honor society": 8
+        "interact club": 12
+        "red cross": 8
+        "habitat for humanity": 8
+        "donation drive": 10
+        "awareness campaign": 12
+        "ambassador": 8
+
+    marketing:
+      weight: 50
+      keywords:
+        "marketing": 16
+        "social media": 14
+        "social media manager": 18
+        "content creation": 12
+        "content creator": 12
+        "instagram": 8
+        "tiktok": 8
+        "canva": 8
+        "graphic design": 12
+        "branding": 12
+        "public relations": 14
+        "pr team": 10
+        "campaign": 12
+        "promotion": 8
+        "advertising": 12
+        "newsletter": 10
+        "copywriting": 12
+        "engagement": 8
+        "analytics": 8
+        "videography": 8
+        "photography": 6
+
+  # Small additive bonuses (applied after categories, before the 100 cap).
+  bonuses:
+    leadership:
+      points: 10
+      keywords:
+        - "president"
+        - "founder"
+        - "captain"
+        - "officer"
+        - "chair"
+        - "lead"
+        - "director"
+        - "head of"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Email draft template. Placeholders: {first_name}, {org}, {pitch},
+# {highlights}, {sender_name}. Drafts are saved for YOUR review — never sent
+# automatically.
+# ─────────────────────────────────────────────────────────────────────────────
+email:
+  subject: "Join the {org} Outreach Committee — Class of 2030!"
+  body: |
+    Hi {first_name},
+
+    Congrats on committing to Carnegie Mellon — welcome to the class of 2030!
+
+    I'm reaching out from {org}. {pitch}
+
+    Your background stood out to us{highlights}. We think you'd be a great fit for our Outreach Committee, and we'd love to tell you more.
+
+    Would you be open to a quick chat? No commitment — just coffee and a hello.
+
+    Best,
+    {sender_name}

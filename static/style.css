@@ -1,0 +1,72 @@
+:root {
+  --bg: #f6f7f9; --card: #fff; --ink: #1f2430; --muted: #6b7280;
+  --line: #e5e7eb; --accent: #c41230; /* CMU red */
+  --hot: #dc2626; --warm: #d97706; --cold: #9ca3af;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px; background: var(--card); border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: 700; text-decoration: none; color: var(--ink); }
+nav a { margin-left: 18px; color: var(--accent); text-decoration: none; font-size: 14px; }
+main { max-width: 980px; margin: 24px auto; padding: 0 24px; }
+footer { text-align: center; color: var(--muted); font-size: 13px; padding: 30px; }
+a { color: var(--accent); }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+code { background: #eceff3; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+
+.toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.stats span { margin-right: 16px; }
+.filter input { width: 64px; padding: 4px 6px; }
+button { cursor: pointer; border: 1px solid var(--line); background: #fff; padding: 6px 12px; border-radius: 6px; }
+button[type=submit] { background: var(--accent); color: #fff; border: none; }
+
+table.candidates { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.candidates th, .candidates td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.candidates th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.candidates tr:last-child td { border-bottom: none; }
+
+.score { display: inline-block; min-width: 38px; text-align: center; font-weight: 700; padding: 3px 8px; border-radius: 6px; color: #fff; }
+.score.hot { background: var(--hot); } .score.warm { background: var(--warm); } .score.cold { background: var(--cold); }
+.score.big { font-size: 26px; padding: 8px 14px; }
+.score.big small { font-size: 13px; opacity: .8; }
+
+.chip { display: inline-block; background: #eef2ff; color: #3730a3; border-radius: 12px; padding: 2px 9px; margin: 2px 3px 2px 0; font-size: 12px; }
+.badge { font-size: 12px; padding: 2px 9px; border-radius: 12px; background: #eee; color: #555; text-transform: capitalize; }
+.badge.approved { background: #dcfce7; color: #166534; }
+.badge.rejected { background: #fee2e2; color: #991b1b; }
+.badge.pending { background: #fef9c3; color: #854d0e; }
+
+.empty { background: #fff; padding: 18px; border-radius: 8px; }
+.back { display: inline-block; margin-bottom: 12px; text-decoration: none; }
+
+.profile { background: var(--card); padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.profile-head { display: flex; justify-content: space-between; align-items: center; }
+.profile h1 { margin: 0; }
+.meta { font-size: 14px; color: var(--muted); }
+
+.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
+@media (max-width: 760px) { .columns { grid-template-columns: 1fr; } }
+.card { background: var(--card); padding: 18px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.card h2 { margin-top: 0; font-size: 16px; }
+
+.cat { margin-bottom: 14px; }
+.cat-head { display: flex; justify-content: space-between; font-weight: 600; text-transform: capitalize; }
+.cat-score { color: var(--muted); font-weight: 500; }
+.bar { height: 7px; background: #eee; border-radius: 4px; margin: 6px 0; overflow: hidden; }
+.fill { height: 100%; background: var(--accent); }
+.bonus { font-size: 14px; color: #166534; margin-top: 8px; }
+
+.subject { font-size: 14px; }
+pre.body { background: #f8fafc; border: 1px solid var(--line); padding: 12px; border-radius: 8px; white-space: pre-wrap; font: 13px/1.5 ui-monospace, monospace; }
+.actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.actions button.approve { background: #16a34a; color: #fff; border: none; }
+.actions button.reject { background: #fff; color: #991b1b; border: 1px solid #fecaca; }
+.raw { margin-top: 18px; }
+.raw pre { white-space: pre-wrap; background: var(--card); padding: 12px; border-radius: 8px; font-size: 13px; }

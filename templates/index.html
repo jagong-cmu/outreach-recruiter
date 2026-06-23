@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="toolbar">
+  <div class="stats">
+    <span><strong>{{ stats.total }}</strong> candidates</span>
+    <span><strong>{{ stats.approved }}</strong> approved</span>
+    <span class="muted">target: CMU · class of {{ stats.target.grad_year }}</span>
+  </div>
+  <form method="get" class="filter">
+    <label>Min score
+      <input type="number" name="min_score" value="{{ min_score }}" min="0" max="100">
+    </label>
+    <button type="submit">Filter</button>
+  </form>
+</div>
+
+{% if not rows %}
+  <p class="empty">No scored candidates yet. Run
+    <code>python cli.py load-sample &amp;&amp; python cli.py score &amp;&amp; python cli.py draft</code>.
+  </p>
+{% endif %}
+
+<table class="candidates">
+  <thead>
+    <tr><th>Score</th><th>Name</th><th>Headline</th><th>Top signals</th><th>Status</th></tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    {% set score = r.score or 0 %}
+    <tr class="status-{{ r.draft_status }}">
+      <td>
+        <span class="score
+          {% if score >= 70 %}hot{% elif score >= 40 %}warm{% else %}cold{% endif %}">
+          {{ score }}
+        </span>
+      </td>
+      <td><a href="{{ url_for('candidate', cid=r.id) }}">{{ r.name }}</a></td>
+      <td class="muted small">{{ r.headline or '' }}</td>
+      <td class="small">
+        {% if r.breakdown %}
+          {% for cat, d in r.breakdown.categories.items() %}
+            {% for m in d.matched[:2] %}<span class="chip">{{ m.keyword }}</span>{% endfor %}
+          {% endfor %}
+        {% endif %}
+      </td>
+      <td><span class="badge {{ r.draft_status }}">{{ r.draft_status }}</span></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}{{ c.name }} — Outreach Recruiter{% endblock %}
+{% block content %}
+
+<a href="{{ url_for('index') }}" class="back">← All candidates</a>
+
+<div class="profile">
+  <div class="profile-head">
+    <h1>{{ c.name }}</h1>
+    <span class="score big
+      {% if (c.score or 0) >= 70 %}hot{% elif (c.score or 0) >= 40 %}warm{% else %}cold{% endif %}">
+      {{ c.score or 0 }}<small>/100</small>
+    </span>
+  </div>
+  <p class="muted">{{ c.headline or '' }}</p>
+  <p class="meta">
+    {% if c.location %}📍 {{ c.location }}{% endif %}
+    {% if c.grad_year %} · 🎓 Class of {{ c.grad_year }}{% endif %}
+    {% if c.school %} · {{ c.school }}{% endif %}
+    {% if c.email %} · ✉️ {{ c.email }}{% endif %}
+    {% if c.profile_url and 'http' in c.profile_url %} · <a href="{{ c.profile_url }}" target="_blank">profile</a>{% endif %}
+  </p>
+</div>
+
+<div class="columns">
+  <section class="card">
+    <h2>Why this score</h2>
+    {% if c.breakdown %}
+      {% for cat, d in c.breakdown.categories.items() %}
+        <div class="cat">
+          <div class="cat-head">
+            <span class="cat-name">{{ cat }}</span>
+            <span class="cat-score">{{ d.score }} / {{ d.cap }}</span>
+          </div>
+          <div class="bar"><div class="fill" style="width: {{ (d.score / d.cap * 100) if d.cap else 0 }}%"></div></div>
+          <div class="chips">
+            {% for m in d.matched %}<span class="chip">{{ m.keyword }} +{{ m.points }}</span>{% endfor %}
+            {% if not d.matched %}<span class="muted small">no signals matched</span>{% endif %}
+          </div>
+        </div>
+      {% endfor %}
+      {% for b in c.breakdown.bonuses %}
+        <div class="bonus">🏅 {{ b.name }} bonus +{{ b.points }}
+          ({{ b.matched | join(', ') }})</div>
+      {% endfor %}
+    {% else %}
+      <p class="muted">Not scored yet.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Email draft</h2>
+    {% if c.draft_subject %}
+      <p class="subject"><strong>Subject:</strong> {{ c.draft_subject }}</p>
+      <pre class="body">{{ c.draft_body }}</pre>
+      <div class="actions">
+        <form method="post" action="{{ url_for('set_status', cid=c.id) }}">
+          <input type="hidden" name="status" value="approved">
+          <button class="approve" type="submit">✓ Approve</button>
+        </form>
+        <form method="post" action="{{ url_for('set_status', cid=c.id) }}">
+          <input type="hidden" name="status" value="rejected">
+          <button class="reject" type="submit">✕ Reject</button>
+        </form>
+        <span class="badge {{ c.draft_status }}">{{ c.draft_status }}</span>
+      </div>
+    {% else %}
+      <p class="muted">No draft. Run <code>python cli.py draft</code>.</p>
+    {% endif %}
+  </section>
+</div>
+
+<details class="raw">
+  <summary>Raw scraped/imported text</summary>
+  <pre>{{ c.raw_text or '(none)' }}</pre>
+</details>
+
+{% endblock %}
