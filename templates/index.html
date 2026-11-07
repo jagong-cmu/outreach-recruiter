@@ -2,7 +2,7 @@
 {% block content %}
 
 {% if missing %}
-  <p class="warn">Fill <code>{{ missing | join(', ') }}</code> in <code>config.local.yaml</code>, then run <code>python cli.py run</code>.</p>
+  <p class="warn">Emails and long messages have no sign-off yet. Fill <code>{{ missing | join(', ') }}</code> in <code>config.local.yaml</code>, then restart the dashboard.</p>
 {% endif %}
 
 <div class="stats">
@@ -59,7 +59,6 @@
       <td>
         <a href="{{ url_for('prospect', pid=r.id) }}">{{ r.name }}</a>
         {% if r.cmu_link %}<span class="vbadge ok">CMU</span>{% endif %}
-        {% if not r.opener %}<span class="vbadge bad">no opener</span>{% endif %}
         <div class="muted small">{{ r.title or '' }}</div>
       </td>
       <td class="small">{{ r.firm or '' }}</td>

@@ -14,17 +14,10 @@ import json
 
 from flask import Flask, Response, abort, redirect, render_template, request, url_for
 
-from outreach import db, messages, qualify
+from outreach import db, messages, qualify, scoring
 from outreach.config import load_config, missing_identity
 
 app = Flask(__name__)
-
-
-def _regenerate(conn, prospect_id: int) -> None:
-    row = db.get_prospect(conn, prospect_id)
-    db.delete_messages(conn, prospect_id)
-    for m in messages.generate(dict(row)):
-        db.save_message(conn, prospect_id, m["channel"], m["subject"], m["body"])
 
 
 @app.route("/")
@@ -35,7 +28,9 @@ def index():
     cfg = load_config()
     with db.connect() as conn:
         rows = [dict(r) for r in db.ranked(conn, min_score, stage, segment)]
-        due = [dict(r) for r in db.followups_due(conn, cfg["pipeline"]["followup_after_days"])]
+        enabled = cfg["templates"].get("enabled_channels")
+        due = ([] if enabled and "followup" not in enabled else
+               [dict(r) for r in db.followups_due(conn, cfg["pipeline"]["followup_after_days"])])
         counts = db.stage_counts(conn)
         segments = sorted({r["segment"] for r in db.all_prospects(conn) if r["segment"]})
     for r in rows:
@@ -54,16 +49,14 @@ def prospect(pid):
         row = db.get_prospect(conn, pid)
         if not row:
             abort(404)
-        stored = {m["channel"]: dict(m) for m in db.get_messages(conn, pid)}
     p = dict(row)
     p["breakdown"] = json.loads(p["breakdown"]) if p.get("breakdown") else None
-    ordered = []
-    for channel, label in messages.CHANNEL_LABELS.items():
-        if channel in stored:
-            ordered.append({**stored[channel], "label": label,
-                            "limit": cfg["limits"].get(channel)})
+    # Drafts render on each view, so "in two days" stays correct.
+    msgs = [{**m, "label": messages.CHANNEL_LABELS[m["channel"]]}
+            for m in messages.generate(p, cfg)]
+    msgs.sort(key=lambda m: list(messages.CHANNEL_LABELS).index(m["channel"]))
     return render_template(
-        "prospect.html", p=p, msgs=ordered, verdict=qualify.qualify(p),
+        "prospect.html", p=p, msgs=msgs, verdict=qualify.qualify(p), topic=messages.topic_for(p, cfg),
         best=messages.best_channel(p), links=messages.search_links(p),
         stages=db.STAGES, questions=cfg["discovery_questions"],
     )
@@ -93,11 +86,45 @@ def save_notes(pid):
     return redirect(url_for("prospect", pid=pid))
 
 
-@app.post("/prospect/<int:pid>/opener")
-def save_opener(pid):
+@app.post("/prospect/<int:pid>/personalize")
+def personalize(pid):
     with db.connect() as conn:
-        db.set_opener(conn, pid, request.form.get("opener", ""))
-        _regenerate(conn, pid)
+        db.set_personalization(conn, pid, request.form.get("opener", ""),
+                               request.form.get("topic", ""))
+    return redirect(url_for("prospect", pid=pid))
+
+
+@app.route("/alumni")
+def alumni():
+    cfg = load_config()
+    searches = cfg["alumni_searches"]
+    build = lambda items: [(k, messages.alumni_search_url(k)) for k in items]
+    with db.connect() as conn:
+        rows = [dict(r) for r in db.ranked(conn) if r["cmu_link"]]
+    return render_template("alumni.html", roles=build(searches["roles"]), rows=rows,
+                           firms=build(searches["firms"]), segments=cfg["scoring"]["segments"])
+
+
+@app.post("/prospect/add")
+def add_prospect():
+    form = request.form
+    name, url = form.get("name", "").strip(), form.get("linkedin_url", "").strip()
+    if not name or not url.startswith("http"):
+        abort(400)
+    cfg = load_config()
+    person = {"name": name, "title": form.get("title", "").strip(),
+              "firm": form.get("firm", "").strip(), "segment": form.get("segment", ""),
+              "linkedin_url": url, "source_url": url, "confidence": "high",
+              "cmu_link": True,
+              "why_relevant": "CMU alum that you found on LinkedIn."}
+    with db.connect() as conn:
+        pid = db.upsert_prospect(conn, person)
+        row = dict(db.get_prospect(conn, pid))
+        verdict = qualify.qualify(row, cfg)
+        db.set_fit(conn, pid, verdict["fit"])
+        if verdict["fit"] in qualify.PASSING:
+            result = scoring.score_prospect(row, cfg)
+            db.save_score(conn, pid, result["total"], result["breakdown"])
     return redirect(url_for("prospect", pid=pid))
 
 

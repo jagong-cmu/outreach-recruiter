@@ -2,17 +2,28 @@
 # This repo is public. Put your name, company and pitch in config.local.yaml.
 
 sender:
-  sender_name: ""
-  company_name: ""
+  sender_name: ""       # Used to sign emails and long messages.
   sender_email: ""
-  one_liner: ""
-  # Say only what is true. Do not write "YC-backed" for an interview.
-  reason_now: "I have a YC interview on Monday and I want to test the idea against people who do this work."
-  call_ask: "Could I get 15 minutes this weekend? A two-line reply also helps."
-  signoff: ""
+  signoff: ""           # Usually your first name.
+  calendar_url: ""      # Booking link. Goes in every message that has room.
+  interview_date: "2026-11-09"
 
 pipeline:
   followup_after_days: 1      # The window is three days, so follow up fast.
+
+# LinkedIn sender. It stops at the first warning from LinkedIn.
+linkedin:
+  cdp_url: "http://127.0.0.1:9333"
+  daily_limit: 1000
+  delay_seconds: 180          # Wait between invites.
+
+# Shared queue for two or more senders. Each sender sets both values in
+# config.local.yaml. Never put the database URL in this file: the repo is public.
+# With a URL set, send-linkedin claims each person first and skips anyone that
+# another sender holds. It stops if it cannot reach the database.
+shared:
+  database_url: ""            # postgresql://... from Neon or Supabase
+  sender: ""                  # A short name, different for each sender.
 
 # Length limits per channel. LinkedIn notes: 200 characters on a free account,
 # 300 on Premium. Set linkedin_note to 300 in config.local.yaml if you have Premium.
@@ -54,6 +65,7 @@ qualify:
   do_not_contact:
     - competitor
     - journalist
+    - yc_partner
 
 scoring:
   segment_weight: 40
@@ -85,6 +97,7 @@ scoring:
     role:
       weight: 25
       keywords:
+        credit agreement: 12
         collateral: 12
         underwriting: 12
         appraisal: 12
@@ -105,56 +118,203 @@ scoring:
     public_email: 4
     role_confirmed: 3
 
-# Messages. Do not claim customers, pilots or data that you do not have.
+# Messages. The frame: a CMU student who is building in this space and wants to
+# learn. Do not pitch. Do not claim customers, pilots or YC backing.
 templates:
-  groups:
-    lender: [bank, private_credit, abf_specialty, equipment_finance]
-    valuation: [appraiser, insurer, rating_agency, market_data]
-    borrower: [neocloud]
-    market: [gpu_resale, reliability_expert]
-    voice: [analyst, lawyer, founder]
-  asks:
-    lender: "How do you decide what a GPU is worth over the life of a loan, and what would you want to know that you can't see today?"
-    valuation: "Where do GPU values go wrong today, and would usage or thermal data change your numbers?"
-    borrower: "What do lenders ask you to prove about your fleet, and what would you never share with them?"
-    market: "How much does a GPU's usage history change what it sells for or how long it lasts?"
-    voice: "Who feels this problem the most, and who should I talk to?"
-    default: "What am I getting wrong about this problem?"
+  lowercase: true       # All messages are lower case. Set to false for capitals.
+  # Channels that show in the dashboard. Delete this line to show all of them.
+  enabled_channels: [linkedin_note]
+  # {topic} fills "learn how ____". A prospect's own topic field wins. Then the
+  # first role rule that matches wins. Then the segment default applies.
+  role_topics:
+    - segments: [bank, private_credit, abf_specialty, equipment_finance]
+      title_has: ["risk", "credit officer"]
+      topic: "you assess risk on GPU-backed loans"
+    - segments: [bank, private_credit, abf_specialty, equipment_finance]
+      title_has: ["origination", "originations"]
+      topic: "you source and evaluate GPU deals"
+    - segments: [bank, private_credit, abf_specialty, equipment_finance]
+      title_has: ["structuring", "structured"]
+      topic: "you structure GPU-backed deals"
+    - segments: [neocloud]
+      title_has: ["accounting", "controller"]
+      topic: "you handle GPU depreciation"
+    - segments: [neocloud]
+      title_has: ["cfo", "financial", "finance", "treasurer", "treasury", "capital markets"]
+      topic: "you finance GPUs with your lenders"
+    - segments: [neocloud]
+      title_has: ["infrastructure", "operations", "technology", "cto", "engineering"]
+      topic: "you track GPU health across your fleet"
+    - segments: [rating_agency]
+      title_has: ["project", "infrastructure"]
+      topic: "you rate GPU-backed financings"
+  segment_topics:
+    bank: "your team structures GPU financing"
+    private_credit: "your team underwrites GPU loans"
+    abf_specialty: "your team underwrites GPU-backed deals"
+    equipment_finance: "you value GPUs when you finance them"
+    rating_agency: "you assess GPU-backed deals"
+    insurer: "you think about insuring GPU values"
+    appraiser: "you would appraise GPUs"
+    market_data: "you track GPU prices"
+    neocloud: "you think about financing GPUs"
+    gpu_resale: "you price used GPUs"
+    reliability_expert: "GPUs wear out and fail"
+    lawyer: "GPU-backed loans get documented"
+    analyst: "you think about GPU value and debt"
+    founder: "you see GPU financing today"
+    default: "GPU financing works in your part of the market"
+  # Each fact is checked against its source. Only use facts that you can defend.
+  # "short" goes in the LinkedIn note when it fits the limit. Nobody gets a fact
+  # about their own firm or their own work.
+  facts:
+    useful_life:
+      segments: [bank, private_credit, abf_specialty, equipment_finance, appraiser, lawyer, analyst]
+      exclude_firms: ["quinn emanuel", "coreweave"]
+      source: "https://www.quinnemanuel.com/the-firm/publications/client-alert-emerging-litigation-risks-in-financing-ai-data-centers-boom/"
+      text: "coreweave depreciates its gpus over six years, but a quinn emanuel alert says project lawyers and engineers generally estimate three to four."
+      short: "coreweave depreciates gpus over six years, but project lawyers often assume three to four."
+    h100_prices:
+      segments: [neocloud, market_data, founder]
+      exclude_firms: ["luxor"]
+      source: "https://hashrateindex.com/blog/used-gpu-market-pricing-deprecation-secondary-ai/"
+      text: "used h100s traded as high as $50,000 each in mid-2024. by this spring, a used 8-gpu h100 server was going for roughly $150-180k."
+      short: "used h100s hit $50k each in mid-2024. this spring, a whole used 8-gpu server went for $150-180k."
+    memory_errors:
+      segments: [rating_agency, insurer]
+      exclude_firms: []
+      source: "https://arxiv.org/html/2503.11901v4"
+      text: "one study of 11.7 million gpu hours found that h100s hit uncorrectable memory errors about 3.2x as often per gpu as a100s."
+      short: "one study found h100s hit uncorrectable memory errors about 3.2x as often per gpu as a100s."
+    failure_position:
+      segments: [gpu_resale]
+      exclude_firms: []
+      source: "https://www.ornl.gov/research-highlight/gpu-lifetimes-titan-supercomputer-survival-analysis-and-reliability"
+      text: "oak ridge found that gpu failures on the titan supercomputer tracked heat and usage, and even where a gpu sat in the machine."
+      short: "oak ridge found titan gpu failures tracked heat, usage, and even where a gpu sat in the machine."
+    failure_rate_myth:
+      segments: [reliability_expert]
+      exclude_firms: ["data gravity", "meta"]
+      source: "https://www.datagravity.dev/p/how-long-does-a-gpu-last"
+      text: "one analysis says the 9% gpu failure rate people quote comes from meta's llama 3 paper, which counted job interruptions, not card replacements."
+      short: "one analysis says the quoted 9% gpu failure rate counted job interruptions, not card replacements."
   channels:
     linkedin_note:
-      body: "Hi {first_name}, {opener} I'm researching how lenders value GPU collateral over a loan's life. Could I ask you a few questions?"
+      # Founder's wording, cut to fit LinkedIn's 300 limit. Change only the name and alumni phrase.
+      # No booking link here. The founder sends it after the person replies.
+      body: "Hey {first_name}, {short_intro} building something in gpu financing. I'd love to have a quick 15 minute chat to learn more about this space. I have a YC interview on Monday so anything this weekend would be really appreciated."
     linkedin_dm:
       body: |
-        Hi {first_name}, {opener}
+        Hey {first_name}, {long_intro} building something in GPU financing. I came across your profile and thought you had a great perspective on this area. {opener}
 
-        {one_liner} We are early, and I am here to learn, not to sell. {reason_now}
+        I'd love to have a quick 15 minute chat to learn more about this space, especially how {topic}. {timing_line}
 
-        One question: {ask}
+        {fact_line}
 
-        {call_ask}
+        {calendar_line}
 
         {signoff}
     x_dm:
-      body: "Hi {first_name}, {opener} {one_liner} I am here to learn, not to sell. {ask} {call_ask}"
+      body: "Hey {first_name}, {dm_intro} building something in GPU financing. I'd love to have a quick 15 minute chat to learn more about this space. {timing_line}"
     email:
-      subject: "Question on GPU collateral at {firm}"
+      subject: "CMU student with a question on GPU financing"
       body: |
-        Hi {first_name},
+        Hey {first_name},
 
-        {opener}
+        {long_intro} building something in GPU financing. I came across your profile and thought you had a great perspective on this area. {opener}
 
-        {one_liner} We are early, and I am here to learn, not to sell. {reason_now}
+        I'd love to have a quick 15 minute chat to learn more about this space, especially how {topic}. {timing_line}
 
-        One question: {ask}
+        {fact_line}
 
-        {call_ask}
+        {calendar_line}
+
+        If you're not the right person, I'd be grateful for a pointer to someone who is.
 
         {signoff}
-        {company_name}
-
-        If this is not for you, say so and I will not write again.
     followup:
-      body: "Hi {first_name}, one short follow-up. If a call is too much, one line helps: {ask} If this is not your area, who should I ask? Thanks, {signoff}"
+      body: "Hey {first_name}, one quick follow-up. I'd still love a quick 15 minute chat to learn how {topic}. If you're not the right person, who should I ask? {calendar_line}"
+
+# X research. Results go to data/x_candidates.json for review. The first command
+# uses the paid API. Add --browser for the backup in your logged-in Chrome.
+x_search:
+  max_usd: 10                 # The run stops before a page could pass this.
+  min_gap_hours: 24           # A post query runs once a day at most.
+  page_size: 20               # Posts per query. A post record costs $0.005.
+  user_page_size: 25          # A user record costs $0.010.
+  min_followers: 20
+  # Each query names GPUs or compute AND a finance term. Do not add a term that
+  # stands alone, such as "private credit". Post search runs first because it is
+  # cheaper and shows who talks about the topic now.
+  post_queries:
+    private_credit:
+      - '"GPU-backed" (loan OR loans OR lending OR lender OR lenders OR facility OR debt)'
+      - '"GPU loans" OR "GPU lending" OR "GPU lenders" OR "GPU debt" OR "GPU credit"'
+      - 'GPU (DDTL OR "delayed draw") '
+      - '"advance rate" (GPU OR GPUs)'
+    abf_specialty:
+      - '"GPU collateral" OR "GPU as collateral" OR "GPUs as collateral"'
+      - '"GPU ABS" OR "GPU securitization" OR "compute ABS" OR "GPU-backed ABS"'
+      - '"GPU financing" (underwrite OR underwriting OR structure OR structured OR lender OR lenders)'
+    neocloud:
+      - 'neocloud (lenders OR "credit facility" OR "debt financing" OR underwriting OR "useful life")'
+    insurer:
+      - '("residual value" OR RVI) (GPU OR GPUs) (insurance OR insurer OR insurers OR underwriter)'
+      - '"non-payment insurance" GPU OR "GPU insurance" OR "compute insurance"'
+    appraiser:
+      - '"GPU appraisal" OR "GPU appraisals" OR "GPU valuation" OR "appraise GPUs"'
+    rating_agency:
+      - '(GPU OR GPUs OR neocloud) (Moody''s OR KBRA OR Fitch) (rated OR rating OR ABS)'
+  user_queries:               # X matches these on name, username and bio.
+    founder: ["gpu financing", "compute financing", "compute markets", "GPU lending", "GPU credit",
+              "GPU backed", "compute credit"]
+    private_credit: ["AI infrastructure credit", "GPU debt", "AI infrastructure finance",
+                     "AI infrastructure investor", "GPU finance", "GPU investor",
+                     "compute finance", "neocloud finance", "GPU cloud CFO"]
+    abf_specialty: ["GPU collateral"]
+    appraiser: ["GPU appraisal", "GPU valuation"]
+    insurer: ["GPU insurance", "compute insurance"]
+  # Backup: python cli.py x-search --browser. It reads pages in your logged-in Chrome.
+  browser:
+    max_searches: 40          # The run stops at this count of search pages.
+    max_profiles: 60          # Post authors need a profile visit for the bio checks.
+    delay_seconds: 6          # Wait before each page.
+    scroll_seconds: 2
+    scrolls: 3
+
+# Opened by hand in your own LinkedIn account, on CMU's alumni page.
+alumni_searches:
+  roles:
+    - "private credit"
+    - "asset based finance"
+    - "structured credit"
+    - "structured finance"
+    - "equipment finance"
+    - "infrastructure finance"
+    - "digital infrastructure"
+    - "data center finance"
+    - "credit risk"
+    - "GPU"
+    - "AI infrastructure"
+    - "residual value"
+  firms:
+    - "CoreWeave"
+    - "Lambda"
+    - "Crusoe"
+    - "Nebius"
+    - "Blackstone"
+    - "Apollo"
+    - "Ares"
+    - "Blue Owl"
+    - "Magnetar"
+    - "PIMCO"
+    - "Macquarie"
+    - "Morgan Stanley"
+    - "JPMorgan"
+    - "Goldman Sachs"
+    - "MUFG"
+    - "Moody's"
+    - "KBRA"
 
 # Shown on each prospect page. Ask about the past, not about your idea.
 discovery_questions:
@@ -164,6 +324,8 @@ discovery_questions:
   - "When did a value surprise you? What did you do?"
   - "What happens to the loan if the value falls? Who gets the call?"
   - "If a borrower must share GPU telemetry, who says no? Why?"
+  - "Does a GPU's usage or thermal history change its resale price or your advance rate? What did you see?"
+  - "Have you seen a telemetry product on a deal, such as Aravolta? What happened?"
   - "Who pays for an appraisal today, how much, and who signs off on it?"
   - "Would a regulator, auditor or rating agency accept a value based on telemetry?"
   - "Who else should I talk to? Can you introduce me?"

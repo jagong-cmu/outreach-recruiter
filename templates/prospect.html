@@ -33,17 +33,18 @@
   <h2>Why this person</h2>
   <p>{{ p.why_relevant or '' }}</p>
   <p class="muted small">Public fact: {{ p.hook or 'none' }}</p>
-  <form method="post" action="{{ url_for('save_opener', pid=p.id) }}">
-    <label class="small">Opener (one short, true sentence about this person)
+  <form method="post" action="{{ url_for('personalize', pid=p.id) }}">
+    <label class="small">Learn how ... (this fills the blank in every message)
+      <textarea name="topic" rows="1" placeholder="{{ topic }}">{{ p.topic or '' }}</textarea></label>
+    <label class="small">Personal fact (optional, one true sentence, used in long messages)
       <textarea name="opener" rows="2">{{ p.opener or '' }}</textarea></label>
-    <button type="submit">Save opener and redraft</button>
+    <button type="submit">Save and redraft</button>
   </form>
 </section>
 
 <section class="card top">
   <h2>Messages</h2>
   <p class="muted small">Start with: {{ best }}. Edits in these boxes are not saved. Copy them right after you edit.</p>
-  {% if not msgs %}<p class="warn">No drafts. Add an opener, or run <code>python cli.py run</code>.</p>{% endif %}
   {% for m in msgs %}
     <div class="msg" data-limit="{{ m.limit or '' }}">
       <div class="msg-head">

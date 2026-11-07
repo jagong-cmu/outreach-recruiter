@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS prospects (
     segment       TEXT,
     why_relevant  TEXT,
     hook          TEXT,                   -- public fact, with its source
-    opener        TEXT,                   -- short sentence used in messages
+    opener        TEXT,                   -- optional fact for long messages
+    topic         TEXT,                   -- optional override for "learn how ____"
     linkedin_url  TEXT,
     x_handle      TEXT,
     email         TEXT,
@@ -52,18 +53,10 @@ CREATE TABLE IF NOT EXISTS scores (
     breakdown   TEXT,
     scored_at   TEXT DEFAULT (datetime('now'))
 );
-
-CREATE TABLE IF NOT EXISTS messages (
-    prospect_id INTEGER NOT NULL REFERENCES prospects(id) ON DELETE CASCADE,
-    channel     TEXT NOT NULL,
-    subject     TEXT,
-    body        TEXT,
-    PRIMARY KEY (prospect_id, channel)
-);
 """
 
 FIELDS = ("name", "title", "firm", "segment", "why_relevant", "hook", "opener",
-          "linkedin_url", "x_handle", "email", "source_url", "source_date",
+          "topic", "linkedin_url", "x_handle", "email", "source_url", "source_date",
           "confidence", "cmu_link")
 
 
@@ -82,6 +75,10 @@ def connect(path: str | None = None) -> Iterator[sqlite3.Connection]:
 def init_db(path: str | None = None) -> None:
     with connect(path) as conn:
         conn.executescript(SCHEMA)
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(prospects)")}
+        if "topic" not in cols:
+            conn.execute("ALTER TABLE prospects ADD COLUMN topic TEXT")
+        conn.execute("DROP TABLE IF EXISTS messages")
 
 
 def dedupe_key(name: str, firm: str) -> str:
@@ -129,29 +126,10 @@ def delete_score(conn: sqlite3.Connection, prospect_id: int) -> None:
     conn.execute("DELETE FROM scores WHERE prospect_id=?", (prospect_id,))
 
 
-def save_message(conn: sqlite3.Connection, prospect_id: int, channel: str,
-                 subject: str, body: str) -> None:
-    conn.execute(
-        """INSERT INTO messages (prospect_id, channel, subject, body)
-           VALUES (?, ?, ?, ?)
-           ON CONFLICT(prospect_id, channel) DO UPDATE SET
-             subject=excluded.subject, body=excluded.body""",
-        (prospect_id, channel, subject, body),
-    )
-
-
-def delete_messages(conn: sqlite3.Connection, prospect_id: int) -> None:
-    conn.execute("DELETE FROM messages WHERE prospect_id=?", (prospect_id,))
-
-
-def get_messages(conn: sqlite3.Connection, prospect_id: int) -> list[sqlite3.Row]:
-    return conn.execute("SELECT * FROM messages WHERE prospect_id=?",
-                        (prospect_id,)).fetchall()
-
-
-def set_opener(conn: sqlite3.Connection, prospect_id: int, opener: str) -> None:
-    conn.execute("UPDATE prospects SET opener=? WHERE id=?",
-                 (opener.strip() or None, prospect_id))
+def set_personalization(conn: sqlite3.Connection, prospect_id: int, opener: str,
+                        topic: str) -> None:
+    conn.execute("UPDATE prospects SET opener=?, topic=? WHERE id=?",
+                 (opener.strip() or None, topic.strip() or None, prospect_id))
 
 
 def set_notes(conn: sqlite3.Connection, prospect_id: int, notes: str) -> None:
@@ -170,6 +148,10 @@ def set_stage(conn: sqlite3.Connection, prospect_id: int, stage: str,
         )
     else:
         conn.execute("UPDATE prospects SET stage=? WHERE id=?", (stage, prospect_id))
+
+
+def set_linkedin_url(conn: sqlite3.Connection, prospect_id: int, url: str) -> None:
+    conn.execute("UPDATE prospects SET linkedin_url=? WHERE id=?", (url, prospect_id))
 
 
 def mark_followed_up(conn: sqlite3.Connection, prospect_id: int) -> None:
@@ -199,7 +181,12 @@ def ranked(conn: sqlite3.Connection, min_score: int = 0,
     if segment:
         sql += " AND p.segment = ?"
         args.append(segment)
-    return conn.execute(sql + " ORDER BY s.total DESC, p.name ASC", args).fetchall()
+    # CMU alumni reply most, then people with a personal fact.
+    return conn.execute(
+        sql + """ ORDER BY p.cmu_link DESC, (p.opener IS NOT NULL) DESC,
+                  s.total DESC, p.name ASC""",
+        args,
+    ).fetchall()
 
 
 def get_prospect(conn: sqlite3.Connection, prospect_id: int) -> Optional[sqlite3.Row]:
@@ -220,6 +207,6 @@ def stage_counts(conn: sqlite3.Connection) -> dict:
     for row in conn.execute("SELECT stage, COUNT(*) n FROM prospects GROUP BY stage"):
         counts[row["stage"]] = row["n"]
     counts["sent_today"] = conn.execute(
-        "SELECT COUNT(*) n FROM prospects WHERE date(sent_at)=date('now')"
+        "SELECT COUNT(*) n FROM prospects WHERE date(sent_at, 'localtime')=date('now', 'localtime')"
     ).fetchone()["n"]
     return counts

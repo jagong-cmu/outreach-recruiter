@@ -11,9 +11,11 @@ def cfg():
     from outreach import config
     config.load_config.cache_clear()
     base = dict(config.load_config())
-    base["sender"] = {**base["sender"], "sender_name": "Test Founder",
-                      "company_name": "TestCo", "one_liner": "I'm building GPU appraisals.",
-                      "signoff": "Test"}
+    base["sender"] = {**base["sender"], "sender_name": "Test Founder", "signoff": "Test",
+                      "calendar_url": "https://cal.com/a/15min"}
+    base["limits"] = {**base["limits"], "linkedin_note": 300}
+    base["templates"] = {**base["templates"], "enabled_channels": None,
+                         "lowercase": True}
     return base
 
 

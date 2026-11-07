@@ -36,6 +36,5 @@ def load_config() -> dict:
 
 
 def missing_identity(cfg: dict) -> list[str]:
-    """Return the required sender fields that are still empty."""
-    required = ("sender_name", "company_name", "one_liner")
-    return [f for f in required if not str(cfg["sender"].get(f) or "").strip()]
+    """Return the sign-off fields that are empty. Short messages work without them."""
+    return [f for f in ("signoff",) if not str(cfg["sender"].get(f) or "").strip()]

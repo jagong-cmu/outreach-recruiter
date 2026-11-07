@@ -115,3 +115,8 @@ textarea { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid 
 button.approve { background: #16a34a; color: #fff; border: none; }
 button:disabled { opacity: .5; cursor: default; }
 .actions { flex-wrap: wrap; margin-bottom: 12px; }
+
+.chips a.chip { text-decoration: none; }
+.add-form { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; align-items: end; }
+@media (max-width: 760px) { .add-form { grid-template-columns: 1fr; } }
+.add-form input, .add-form select { display: block; width: 100%; box-sizing: border-box; padding: 6px; }
