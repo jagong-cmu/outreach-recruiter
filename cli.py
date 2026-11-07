@@ -21,6 +21,18 @@ from outreach import db, messages, qualify, scoring
 from outreach.config import load_config, missing_identity
 
 
+def _push_after_import():
+    """With a shared database, send the new prospects to the queue at once."""
+    from outreach import linkedin, pipeline, shared
+    try:
+        sh = shared.settings(load_config())
+        if sh:
+            r = pipeline.sync(sh, linkedin.LOG_PATH)
+            print(f"Shared queue: {r['pulled']} prospects.")
+    except shared.SharedError as err:
+        print(f"Not shared yet: {err}. Run sync later.")
+
+
 def cmd_import_research(args):
     """Import a JSON array of prospects."""
     db.init_db()
@@ -34,6 +46,7 @@ def cmd_import_research(args):
             db.upsert_prospect(conn, person)
             n += 1
     print(f"Imported {n} prospects from {args.file}")
+    _push_after_import()
 
 
 def cmd_import_csv(args):
@@ -49,6 +62,7 @@ def cmd_import_csv(args):
             db.upsert_prospect(conn, row)
             n += 1
     print(f"Imported {n} prospects from {args.file}")
+    _push_after_import()
 
 
 def cmd_run(args):
@@ -305,7 +319,7 @@ def main(argv=None):
     sp.add_argument("--until", help="keep sending daily until this local time, for example "
                                     "2026-11-08T23:00")
     sp.add_argument("--search", action="store_true",
-                    help="with --until: also run the alumni search and sync the shared queue")
+                    help="with --until: also run the alumni search when nobody is left")
     sp.set_defaults(func=cmd_send_linkedin)
 
     sp = sub.add_parser("search-linkedin", help="run the next CMU alumni search terms in Chrome")

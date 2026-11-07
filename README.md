@@ -86,15 +86,19 @@ The sender releases a claim only when it skipped the person before Send. After a
    .venv/bin/python cli.py send-linkedin --limit 10
    ```
 
-6. Run everything automatically. This command syncs the shared queue before each batch, sends the invites, and runs the alumni search when nobody is left to contact. It stops at the deadline or at the first LinkedIn warning.
+6. Run the sender. It syncs the shared queue before each batch, so it gets new prospects from the first sender while it runs. It stops at the deadline or at the first LinkedIn warning.
 
    ```bash
-   caffeinate -dis .venv/bin/python cli.py send-linkedin --until 2026-11-15T23:00 --search
+   caffeinate -dis .venv/bin/python cli.py send-linkedin --until 2026-11-15T23:00
    ```
+
+The second sender does no research and no search. The first sender does the research and imports it. With a shared database, `import-research` and `import-csv` send the new prospects to the queue at once.
 
 Run `shared-status` to see the claims for each sender.
 
-### The alumni search
+### The alumni search (optional, off by default)
+
+The search runs only with `search-linkedin` or `send-linkedin --search`. Do not use it on the second sender's account.
 
 `search-linkedin` opens CMU's alumni page on LinkedIn with each term in `alumni_searches`, and reads the result cards. It runs the terms in `alumni_auto.terms`. It keeps a person only when the headline has a GPU link (a word in `gpu_terms` or a company in `gpu_firms`) and a word in `finance_terms`, and no word in `exclude_terms`. A finance word alone is not enough. The kept people go to your list and to the shared queue at once.
 

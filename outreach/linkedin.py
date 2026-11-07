@@ -435,13 +435,15 @@ def keep_going(until: dt.datetime, delay: Optional[int] = None, search: bool = F
     """Send daily until `until`, and pick up new prospects as they arrive.
 
     It obeys the daily limit, and it ends at the first LinkedIn warning. The
-    deadline matters: the note says "this weekend". With `search`, it syncs the
-    shared queue before each batch, and it runs the alumni search when nobody
-    is left to contact.
+    deadline matters: the note says "this weekend". With a shared database, it
+    syncs the queue before each batch. With `search`, it also runs the alumni
+    search when nobody is left to contact.
     """
     cfg = load_config()
     while dt.datetime.now() < until:
-        if search:
+        # With a shared database, every batch starts with a sync. A sender that
+        # only takes from the queue then gets new research while it runs.
+        if search or shared.settings(cfg):
             _sync(cfg)
         with db.connect() as conn:
             room = cfg["linkedin"]["daily_limit"] - db.stage_counts(conn)["sent_today"]
