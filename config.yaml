@@ -282,7 +282,8 @@ x_search:
     scroll_seconds: 2
     scrolls: 3
 
-# Opened by hand in your own LinkedIn account, on CMU's alumni page.
+# Search terms on CMU's alumni page. The dashboard links open them by hand, and
+# alumni_auto runs them in Chrome.
 alumni_searches:
   roles:
     - "private credit"
@@ -315,6 +316,44 @@ alumni_searches:
     - "MUFG"
     - "Moody's"
     - "KBRA"
+
+# Automatic alumni search (search-linkedin, or send-linkedin --search). It runs the
+# terms in alumni_searches in your logged-in Chrome. With a shared database, each
+# term runs for one sender only, so two senders never repeat a search.
+alumni_auto:
+  daily_searches: 15          # Search terms per sender per day.
+  rerun_days: 14              # Nobody runs a term again before this.
+  max_results_per_term: 40
+  scrolls: 4                  # "Show more results" clicks or scrolls per term.
+  scroll_seconds: 4
+  delay_seconds: 45           # Wait between search terms.
+  # A person is kept only when the headline has one of these words.
+  headline_terms: [credit, lending, lender, loan, debt, financing, structured, securitization,
+                   abs, asset-based, asset based, asset-backed, asset backed, project finance,
+                   infrastructure finance, equipment finance, infrastructure, data center, gpu,
+                   compute, cloud, valuation, appraisal, underwriting, origination,
+                   capital markets, treasury, cfo, coreweave, lambda, crusoe, nebius]
+  # And the headline has none of these. "@ cmu" and "at carnegie mellon" mean a
+  # current student or staff member.
+  exclude_terms: [student, intern, new grad, teaching, educator, recruiter, recruiting, talent,
+                  human resources, marketing, seeking, looking for, journalist, reporter,
+                  trader, quant, "@ carnegie mellon", "at carnegie mellon", "@ cmu", "at cmu",
+                  "@cmu"]
+  # The first rule that matches the headline or firm sets the segment.
+  segment_rules:
+    - {has: [moody, kbra, fitch, rating], segment: rating_agency}
+    - {has: [insurance, insurer, reinsurance], segment: insurer}
+    - {has: [appraisal, appraiser], segment: appraiser}
+    - {has: [equipment finance, leasing], segment: equipment_finance}
+    - {has: [structured, securitization, abs, asset-based, asset based, asset-backed,
+             asset backed, specialty finance],
+       segment: abf_specialty}
+    - {has: [private credit, direct lending, credit, lending, debt, loan, origination],
+       segment: private_credit}
+    - {has: [jpmorgan, goldman, morgan stanley, mufg, barclays, citi, bank], segment: bank}
+    - {has: [coreweave, lambda, crusoe, nebius, gpu, cloud, data center, compute,
+             infrastructure], segment: neocloud}
+  default_segment: analyst
 
 # Shown on each prospect page. Ask about the past, not about your idea.
 discovery_questions:
