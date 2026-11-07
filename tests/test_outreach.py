@@ -839,7 +839,7 @@ class DialogPage:
 
 def test_chat_overlay_is_not_the_invite_box():
     from outreach import linkedin
-    chat = DialogBox("Zeeshan Khan\nClose your conversation with Zeeshan Khan and Jonathan Gong")
+    chat = DialogBox("Pat Lee\nClose your conversation with Pat Lee and Sam Founder")
     overlay = DialogBox("no marker text", overlay=True)
     invite = DialogBox("Add a note to your invitation")
     assert linkedin._dialog(DialogPage([chat, overlay])) is None

@@ -15,7 +15,7 @@ pipeline:
 linkedin:
   cdp_url: "http://127.0.0.1:9333"
   daily_limit: 1000
-  delay_seconds: 180          # Wait between invites.
+  delay_seconds: 90           # Wait between invites.
 
 # Shared queue for two or more senders. Each sender sets both values in
 # config.local.yaml. Never put the database URL in this file: the repo is public.
