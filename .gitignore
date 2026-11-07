@@ -3,6 +3,9 @@ __pycache__/
 *.db
 .venv/
 venv/
-urls.txt
 *.local.yaml
 .DS_Store
+.pytest_cache/
+# Target lists and research hold personal data and market intent.
+# The GitHub repo is public, so these stay local.
+data/

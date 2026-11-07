@@ -1,66 +1,75 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="toolbar">
-  <div class="stats">
-    <span><strong>{{ stats.total }}</strong> candidates</span>
-    <span><strong>{{ stats.approved }}</strong> approved</span>
-    <span class="muted">target: CMU · class of {{ stats.target.grad_year }}</span>
-  </div>
-  <form method="get" class="filter">
-    <label>Min score
-      <input type="number" name="min_score" value="{{ min_score }}" min="0" max="100">
-    </label>
-    <button type="submit">Filter</button>
-  </form>
-</div>
-
-{% if not rows %}
-  <p class="empty">No scored candidates yet. Run
-    <code>python cli.py load-sample &amp;&amp; python cli.py score &amp;&amp; python cli.py draft</code>.
-  </p>
+{% if missing %}
+  <p class="warn">Fill <code>{{ missing | join(', ') }}</code> in <code>config.local.yaml</code>, then run <code>python cli.py run</code>.</p>
 {% endif %}
 
-<table class="candidates">
+<div class="stats">
+  <div><strong>{{ counts.sent_today }}</strong> sent today</div>
+  <div><strong>{{ counts.sent + counts.replied + counts.booked + counts.held }}</strong> sent in total</div>
+  <div><strong>{{ counts.replied }}</strong> replied</div>
+  <div><strong>{{ counts.booked }}</strong> booked</div>
+  <div><strong>{{ counts.held }}</strong> calls held</div>
+</div>
+
+{% if due %}
+<section class="card due">
+  <h2>Follow-ups due ({{ due | length }})</h2>
+  <ul class="plain">
+    {% for d in due %}
+      <li><a href="{{ url_for('prospect', pid=d.id) }}">{{ d.name }}</a>
+        <span class="muted small">{{ d.firm }}, by {{ d.sent_channel or 'unknown channel' }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<form method="get" class="filter">
+  <label>Stage
+    <select name="stage">
+      <option value="">All</option>
+      {% for s in stages %}<option value="{{ s }}" {{ 'selected' if s == stage }}>{{ s }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Segment
+    <select name="segment">
+      <option value="">All</option>
+      {% for s in segments %}<option value="{{ s }}" {{ 'selected' if s == segment }}>{{ s }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Min score
+    <input type="number" name="min_score" value="{{ min_score }}" min="0" max="100">
+  </label>
+  <button type="submit">Filter</button>
+</form>
+
+{% if not rows %}
+  <p class="empty">No scored prospects yet. Run <code>python cli.py import-research data/prospects.json</code>, then <code>python cli.py run</code>.</p>
+{% else %}
+<div class="table-wrap">
+<table class="prospects">
   <thead>
-    <tr><th>Score</th><th>Name</th><th>Headline</th><th>Top signals</th><th>Status</th></tr>
+    <tr><th>Score</th><th>Name</th><th>Firm</th><th>Segment</th><th>First channel</th><th>Stage</th></tr>
   </thead>
   <tbody>
   {% for r in rows %}
-    {% set score = r.score or 0 %}
-    <tr class="status-{{ r.draft_status }}">
+    <tr class="stage-{{ r.stage }}">
+      <td><span class="score {% if r.score >= 70 %}hot{% elif r.score >= 45 %}warm{% else %}cold{% endif %}">{{ r.score }}</span></td>
       <td>
-        <span class="score
-          {% if score >= 70 %}hot{% elif score >= 40 %}warm{% else %}cold{% endif %}">
-          {{ score }}
-        </span>
+        <a href="{{ url_for('prospect', pid=r.id) }}">{{ r.name }}</a>
+        {% if r.cmu_link %}<span class="vbadge ok">CMU</span>{% endif %}
+        {% if not r.opener %}<span class="vbadge bad">no opener</span>{% endif %}
+        <div class="muted small">{{ r.title or '' }}</div>
       </td>
-      <td>
-        <a href="{{ url_for('candidate', cid=r.id) }}">{{ r.name }}</a>
-        {% if r.profile_url and 'linkedin.com' in r.profile_url %}
-          <a class="li-link" href="{{ r.profile_url }}" target="_blank" rel="noopener"
-             title="Open LinkedIn profile">in↗</a>
-        {% endif %}
-        {% if r.verified in ('verified', 'headline') %}
-          <span class="vbadge ok" title="CMU class of 2030 confirmed on profile">✓ CMU '30</span>
-        {% elif r.verified == 'provided' %}
-          <span class="vbadge prov" title="From import; not independently verified">imported</span>
-        {% elif r.verified in ('mismatch', 'unverified') %}
-          <span class="vbadge bad" title="Not a confirmed CMU class of 2030 student">✗ not CMU '30</span>
-        {% endif %}
-      </td>
-      <td class="muted small">{{ r.headline or '' }}</td>
-      <td class="small">
-        {% if r.breakdown %}
-          {% for cat, d in r.breakdown.categories.items() %}
-            {% for m in d.matched[:2] %}<span class="chip">{{ m.keyword }}</span>{% endfor %}
-          {% endfor %}
-        {% endif %}
-      </td>
-      <td><span class="badge {{ r.draft_status }}">{{ r.draft_status }}</span></td>
+      <td class="small">{{ r.firm or '' }}</td>
+      <td class="small">{{ r.segment or '' }}</td>
+      <td class="small">{{ labels[r.channel] }}</td>
+      <td><span class="badge {{ r.stage }}">{{ r.stage }}</span></td>
     </tr>
   {% endfor %}
   </tbody>
 </table>
-
+</div>
+{% endif %}
 {% endblock %}

@@ -1,132 +1,169 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# Outreach Recruiter — configuration
-# Everything tunable lives here: club info, target filter, scoring weights,
-# keyword dictionaries, and the email template. Edit freely.
-# ─────────────────────────────────────────────────────────────────────────────
+# GPU appraisal outreach: configuration.
+# This repo is public. Put your name, company and pitch in config.local.yaml.
 
-club:
-  name: "Outreach Committee"
-  org: "Your Club Name"          # e.g. "ACM @ CMU"
-  sender_name: "Your Name"
-  sender_email: "you@andrew.cmu.edu"
-  reply_to: "you@andrew.cmu.edu"
-  # One or two sentences about what the committee does. Used in email drafts.
-  pitch: >-
-    We run the outreach and marketing efforts for our club — organizing events,
-    growing our community, and telling our story across campus and social media.
+sender:
+  sender_name: ""
+  company_name: ""
+  sender_email: ""
+  one_liner: ""
+  # Say only what is true. Do not write "YC-backed" for an interview.
+  reason_now: "I have a YC interview on Monday and I want to test the idea against people who do this work."
+  call_ask: "Could I get 15 minutes this weekend? A two-line reply also helps."
+  signoff: ""
 
-# Who counts as a candidate. The scraper / importers tag each candidate with a
-# grad_year and school; anything not matching is filtered out before scoring.
-target:
-  grad_year: 2030
-  school_keywords:               # any of these (case-insensitive) marks CMU
-    - "carnegie mellon"
-    - "cmu"
+pipeline:
+  followup_after_days: 1      # The window is three days, so follow up fast.
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Auto-discovery: find candidate profiles on LinkedIn instead of supplying URLs.
-# Opens CMU's alumni/people page in your authenticated session, types `keyword`
-# into the alumni search box, scrolls, and collects profile links. See discover.py.
-#
-# ⚠️ This is the most ban-prone, most fragile part. Keep max_profiles modest.
-# ─────────────────────────────────────────────────────────────────────────────
-discovery:
-  school_people_url: "https://www.linkedin.com/school/carnegie-mellon-university/people/"
-  keyword: "Class of 2030"       # typed into the alumni search/keyword box
-  max_profiles: 50               # hard cap per run (stay under the radar)
-  max_scrolls: 25                # how many times to scroll for more results
+# Length limits per channel. LinkedIn notes: 200 characters on a free account,
+# 300 on Premium. Set linkedin_note to 300 in config.local.yaml if you have Premium.
+limits:
+  linkedin_note: 200
+  x_dm: 500
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ATS scoring. Total is capped at 100.
-#
-# For each category we scan the candidate's text for keywords. Each matched
-# keyword adds its points; the category total is capped at the category weight.
-# Tune the weights so that "a few strong signals" gets near the cap.
-# ─────────────────────────────────────────────────────────────────────────────
+qualify:
+  # A prospect is "confirmed" when one sentence has a term from each list.
+  asset_terms:
+    - gpu
+    - neocloud
+    - compute
+    - ai infrastructure
+    - ai data center
+    - accelerator
+    - coreweave
+    - lambda
+    - crusoe
+  role_terms:
+    - loan
+    - lending
+    - lender
+    - credit
+    - debt
+    - financing
+    - collateral
+    - underwriting
+    - appraisal
+    - valuation
+    - depreciation
+    - residual
+    - useful life
+    - resale
+    - secured
+    - asset-based
+  # Do not cold-pitch these. A journalist can quote you, and a competitor
+  # learns your plan. Change this list when you want to.
+  do_not_contact:
+    - competitor
+    - journalist
+
 scoring:
+  segment_weight: 40
+  segments:
+    bank: 40
+    private_credit: 40
+    abf_specialty: 40
+    equipment_finance: 36
+    insurer: 34
+    appraiser: 34
+    rating_agency: 30
+    neocloud: 28
+    gpu_resale: 28
+    market_data: 24
+    lawyer: 24
+    reliability_expert: 22
+    analyst: 20
+    founder: 18
   categories:
-    outreach:
-      weight: 50
+    asset:
+      weight: 20
       keywords:
-        "community service": 14
-        "community outreach": 16
-        "outreach": 14
-        "volunteer": 10
-        "volunteering": 10
-        "nonprofit": 10
-        "non-profit": 10
-        "fundraising": 12
-        "fundraiser": 12
-        "charity": 10
-        "event planning": 12
-        "event organizer": 12
-        "organized event": 12
-        "service club": 10
-        "key club": 12
-        "national honor society": 8
-        "interact club": 12
-        "red cross": 8
-        "habitat for humanity": 8
-        "donation drive": 10
-        "awareness campaign": 12
-        "ambassador": 8
-
-    marketing:
-      weight: 50
+        gpu: 14
+        neocloud: 12
+        compute: 6
+        ai infrastructure: 10
+        digital infrastructure: 8
+        data center: 6
+    role:
+      weight: 25
       keywords:
-        "marketing": 16
-        "social media": 14
-        "social media manager": 18
-        "content creation": 12
-        "content creator": 12
-        "instagram": 8
-        "tiktok": 8
-        "canva": 8
-        "graphic design": 12
-        "branding": 12
-        "public relations": 14
-        "pr team": 10
-        "campaign": 12
-        "promotion": 8
-        "advertising": 12
-        "newsletter": 10
-        "copywriting": 12
-        "engagement": 8
-        "analytics": 8
-        "videography": 8
-        "photography": 6
-
-  # Small additive bonuses (applied after categories, before the 100 cap).
+        collateral: 12
+        underwriting: 12
+        appraisal: 12
+        valuation: 10
+        residual: 12
+        depreciation: 10
+        useful life: 10
+        asset-based: 10
+        asset backed: 10
+        equipment finance: 10
+        structured: 6
+        credit: 6
+        delayed draw: 8
+        ddtl: 8
   bonuses:
-    leadership:
-      points: 10
-      keywords:
-        - "president"
-        - "founder"
-        - "captain"
-        - "officer"
-        - "chair"
-        - "lead"
-        - "director"
-        - "head of"
+    cmu_link: 10
+    on_x: 3
+    public_email: 4
+    role_confirmed: 3
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Email draft template. Placeholders: {first_name}, {org}, {pitch},
-# {highlights}, {sender_name}. Drafts are saved for YOUR review — never sent
-# automatically.
-# ─────────────────────────────────────────────────────────────────────────────
-email:
-  subject: "Join the {org} Outreach Committee — Class of 2030!"
-  body: |
-    Hi {first_name},
+# Messages. Do not claim customers, pilots or data that you do not have.
+templates:
+  groups:
+    lender: [bank, private_credit, abf_specialty, equipment_finance]
+    valuation: [appraiser, insurer, rating_agency, market_data]
+    borrower: [neocloud]
+    market: [gpu_resale, reliability_expert]
+    voice: [analyst, lawyer, founder]
+  asks:
+    lender: "How do you decide what a GPU is worth over the life of a loan, and what would you want to know that you can't see today?"
+    valuation: "Where do GPU values go wrong today, and would usage or thermal data change your numbers?"
+    borrower: "What do lenders ask you to prove about your fleet, and what would you never share with them?"
+    market: "How much does a GPU's usage history change what it sells for or how long it lasts?"
+    voice: "Who feels this problem the most, and who should I talk to?"
+    default: "What am I getting wrong about this problem?"
+  channels:
+    linkedin_note:
+      body: "Hi {first_name}, {opener} I'm researching how lenders value GPU collateral over a loan's life. Could I ask you a few questions?"
+    linkedin_dm:
+      body: |
+        Hi {first_name}, {opener}
 
-    Congrats on committing to Carnegie Mellon — welcome to the class of 2030!
+        {one_liner} We are early, and I am here to learn, not to sell. {reason_now}
 
-    I'm reaching out from {org}. {pitch}
+        One question: {ask}
 
-    Your background stood out to us{highlights}. We think you'd be a great fit for our Outreach Committee, and we'd love to tell you more.
+        {call_ask}
 
-    Would you be open to a quick chat? No commitment — just coffee and a hello.
+        {signoff}
+    x_dm:
+      body: "Hi {first_name}, {opener} {one_liner} I am here to learn, not to sell. {ask} {call_ask}"
+    email:
+      subject: "Question on GPU collateral at {firm}"
+      body: |
+        Hi {first_name},
 
-    Best,
-    {sender_name}
+        {opener}
+
+        {one_liner} We are early, and I am here to learn, not to sell. {reason_now}
+
+        One question: {ask}
+
+        {call_ask}
+
+        {signoff}
+        {company_name}
+
+        If this is not for you, say so and I will not write again.
+    followup:
+      body: "Hi {first_name}, one short follow-up. If a call is too much, one line helps: {ask} If this is not your area, who should I ask? Thanks, {signoff}"
+
+# Shown on each prospect page. Ask about the past, not about your idea.
+discovery_questions:
+  - "Walk me through your last GPU-backed deal. Who valued the collateral, and how?"
+  - "What did you assume for depreciation and useful life? Where did that number come from?"
+  - "After closing, what do you see about the collateral? How often?"
+  - "When did a value surprise you? What did you do?"
+  - "What happens to the loan if the value falls? Who gets the call?"
+  - "If a borrower must share GPU telemetry, who says no? Why?"
+  - "Who pays for an appraisal today, how much, and who signs off on it?"
+  - "Would a regulator, auditor or rating agency accept a value based on telemetry?"
+  - "Who else should I talk to? Can you introduce me?"

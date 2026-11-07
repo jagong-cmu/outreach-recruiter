@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}{{ p.name }}: GPU Outreach{% endblock %}
+{% block content %}
+
+<a href="{{ url_for('index') }}" class="back">All prospects</a>
+
+{% if verdict.fit == 'confirmed' %}
+  <div class="verify-banner ok"><div class="vb-head">Confirmed fit</div>
+    <div class="vb-evidence">Evidence: <code>{{ verdict.evidence }}</code></div></div>
+{% else %}
+  <div class="verify-banner bad"><div class="vb-head">{{ verdict.fit }}</div>
+    <div class="vb-evidence">{{ verdict.reason }}</div></div>
+{% endif %}
+{% if p.confidence != 'high' %}
+  <p class="warn">Check this person's current role on LinkedIn before you send. The source is old or indirect.</p>
+{% endif %}
+
+<div class="profile">
+  <div class="profile-head">
+    <h1>{{ p.name }}</h1>
+    <span class="score big {% if (p.score or 0) >= 70 %}hot{% elif (p.score or 0) >= 45 %}warm{% else %}cold{% endif %}">{{ p.score or 0 }}<small>/100</small></span>
+  </div>
+  <p class="muted">{{ p.title or '' }}{% if p.firm %}, {{ p.firm }}{% endif %}</p>
+  <p class="meta">{{ p.segment }}{% if p.email %} · <a href="mailto:{{ p.email }}">{{ p.email }}</a>{% endif %}</p>
+  <div class="links">
+    <a class="li-button" href="{{ links.linkedin }}" target="_blank" rel="noopener">{{ 'LinkedIn profile' if links.linkedin_found else 'Find on LinkedIn' }}</a>
+    <a class="x-button" href="{{ links.x }}" target="_blank" rel="noopener">{{ 'X profile' if p.x_handle else 'Find on X' }}</a>
+    {% if p.source_url %}<a class="src-button" href="{{ p.source_url }}" target="_blank" rel="noopener">Source{% if p.source_date %} ({{ p.source_date }}){% endif %}</a>{% endif %}
+  </div>
+</div>
+
+<section class="card top">
+  <h2>Why this person</h2>
+  <p>{{ p.why_relevant or '' }}</p>
+  <p class="muted small">Public fact: {{ p.hook or 'none' }}</p>
+  <form method="post" action="{{ url_for('save_opener', pid=p.id) }}">
+    <label class="small">Opener (one short, true sentence about this person)
+      <textarea name="opener" rows="2">{{ p.opener or '' }}</textarea></label>
+    <button type="submit">Save opener and redraft</button>
+  </form>
+</section>
+
+<section class="card top">
+  <h2>Messages</h2>
+  <p class="muted small">Start with: {{ best }}. Edits in these boxes are not saved. Copy them right after you edit.</p>
+  {% if not msgs %}<p class="warn">No drafts. Add an opener, or run <code>python cli.py run</code>.</p>{% endif %}
+  {% for m in msgs %}
+    <div class="msg" data-limit="{{ m.limit or '' }}">
+      <div class="msg-head">
+        <strong>{{ m.label }}</strong>
+        <span class="count small muted"></span>
+        <button type="button" class="copy">Copy</button>
+      </div>
+      {% if m.subject %}<p class="subject">Subject: {{ m.subject }}</p>{% endif %}
+      <textarea rows="{{ 10 if m.channel in ('email', 'linkedin_dm') else 4 }}">{{ m.body }}</textarea>
+      {% if m.channel != 'followup' %}
+      <form method="post" action="{{ url_for('set_stage', pid=p.id) }}">
+        <input type="hidden" name="stage" value="sent">
+        <input type="hidden" name="channel" value="{{ m.channel }}">
+        <button type="submit" class="approve">I sent this</button>
+      </form>
+      {% else %}
+      <form method="post" action="{{ url_for('followed_up', pid=p.id) }}">
+        <button type="submit" class="approve">I sent the follow-up</button>
+      </form>
+      {% endif %}
+    </div>
+  {% endfor %}
+</section>
+
+<div class="columns">
+  <section class="card">
+    <h2>Pipeline</h2>
+    <p><span class="badge {{ p.stage }}">{{ p.stage }}</span>
+      {% if p.sent_at %}<span class="muted small">sent {{ p.sent_at }} by {{ p.sent_channel }}</span>{% endif %}</p>
+    <div class="actions">
+      {% for s in stages %}
+        <form method="post" action="{{ url_for('set_stage', pid=p.id) }}">
+          <input type="hidden" name="stage" value="{{ s }}">
+          <button type="submit" {{ 'disabled' if s == p.stage }}>{{ s }}</button>
+        </form>
+      {% endfor %}
+    </div>
+    <form method="post" action="{{ url_for('save_notes', pid=p.id) }}">
+      <label class="small">Notes
+        <textarea name="notes" rows="6">{{ p.notes or '' }}</textarea></label>
+      <button type="submit">Save notes</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Why this score</h2>
+    {% if p.breakdown %}
+      {% for cat, d in p.breakdown.categories.items() %}
+        <div class="cat">
+          <div class="cat-head"><span>{{ cat }}</span><span class="cat-score">{{ d.score }} / {{ d.cap }}</span></div>
+          <div class="bar"><div class="fill" style="width: {{ (d.score / d.cap * 100) if d.cap else 0 }}%"></div></div>
+          <div class="chips">{% for m in d.matched %}<span class="chip">{{ m.keyword }} +{{ m.points }}</span>{% endfor %}</div>
+        </div>
+      {% endfor %}
+      {% for b in p.breakdown.bonuses %}<div class="bonus">{{ b.name }} +{{ b.points }}</div>{% endfor %}
+    {% else %}<p class="muted">Not scored.</p>{% endif %}
+  </section>
+</div>
+
+<section class="card top">
+  <h2>Call questions</h2>
+  <ol>{% for q in questions %}<li>{{ q }}</li>{% endfor %}</ol>
+</section>
+
+<script>
+document.querySelectorAll('.msg').forEach(function (box) {
+  var area = box.querySelector('textarea');
+  var count = box.querySelector('.count');
+  var limit = Number(box.dataset.limit) || 0;
+  function update() {
+    var n = area.value.length;
+    count.textContent = limit ? n + ' / ' + limit : n + ' characters';
+    box.classList.toggle('over', limit > 0 && n > limit);
+  }
+  area.addEventListener('input', update);
+  update();
+  var copy = box.querySelector('.copy');
+  copy.addEventListener('click', function () {
+    navigator.clipboard.writeText(area.value).then(function () {
+      copy.textContent = 'Copied';
+      setTimeout(function () { copy.textContent = 'Copy'; }, 1200);
+    });
+  });
+});
+</script>
+{% endblock %}
