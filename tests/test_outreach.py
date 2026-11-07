@@ -1085,32 +1085,46 @@ def test_parse_card_reads_name_and_headline():
     assert ls.parse_card("LinkedIn Member\nPrivate Credit") is None
 
 
-def test_firm_comes_from_the_firm_term_or_the_headline():
+def test_firm_comes_from_the_headline_not_the_search_term(cfg):
     from outreach import linkedin_search as ls
-    assert ls.firm_from("Private Credit Associate at BlackRock", "private credit", []) == "BlackRock"
-    assert ls.firm_from("VP | Credit", "Apollo", ["Apollo"]) == "Apollo"
-    assert ls.firm_from("Credit analyst", "credit", []) == ""
+    firms = cfg["alumni_auto"]["gpu_firms"]
+    assert ls.firm_from("Capital Markets at Crusoe | CMU '15", firms) == "Crusoe"
+    assert ls.firm_from("GPU Financing @Magnetar", firms) == "Magnetar"
+    assert ls.firm_from("Treasury, CoreWeave", firms) == "Coreweave"
+    assert ls.firm_from("Credit analyst", firms) == ""
 
 
 @pytest.mark.parametrize("headline,keep", [
-    ("Private Credit Associate at BlackRock", True),
-    ("Software Engineer at Blackstone", False),
-    ("MBA student | Private credit", False),
-    ("Recruiter, Infrastructure Finance", False)])
-def test_headline_filter(cfg, headline, keep):
+    ("Private Credit Associate at BlackRock", False),        # Finance only.
+    ("Structured Finance @ Deutsche Bank", False),
+    ("Software Engineer at CoreWeave", False),              # GPU only.
+    ("Software Engineer, AWS Lambda at Amazon", False),
+    ("Head of Capital Markets at Crusoe", True),
+    ("Director, Data Center Finance at Blackstone", True),
+    ("VP, GPU Financing at Magnetar", True),
+    ("Treasury at NVIDIA", True),
+    ("MBA student | AI infrastructure investing", False)])
+def test_headline_needs_a_gpu_link_and_a_finance_word(cfg, headline, keep):
     from outreach import linkedin_search as ls
     assert ls.fits(headline, cfg["alumni_auto"]) is keep
 
 
 @pytest.mark.parametrize("headline,firm,segment", [
-    ("Private Credit Associate", "BlackRock", "private_credit"),
-    ("Analyst, Structured Finance", "Moody's Ratings", "rating_agency"),
-    ("Director, ABS", "Guggenheim", "abf_specialty"),
-    ("Infrastructure Lead", "CoreWeave", "neocloud"),
-    ("Investment Analyst", "Some Fund", "analyst")])
+    ("Debt Financing at CoreWeave", "CoreWeave", "neocloud"),
+    ("Analyst, Structured Finance, data centers", "Moody's Ratings", "rating_agency"),
+    ("Director, GPU ABS", "Guggenheim", "abf_specialty"),
+    ("GPU Financing", "Magnetar", "private_credit")])
 def test_segment_rules(cfg, headline, firm, segment):
     from outreach import linkedin_search as ls
     assert ls.segment_for(headline, firm, cfg["alumni_auto"]) == segment
+
+
+def test_the_search_term_never_makes_a_person_confirmed(cfg):
+    from outreach import linkedin_search as ls
+    card = {"name": "Kim Lee", "headline": "Treasury at NVIDIA"}
+    person = ls.to_prospect(card, "https://www.linkedin.com/in/kim", "GPU financing", cfg)
+    assert "GPU financing" not in person["why_relevant"]
+    assert person["firm"] == "NVIDIA" and person["segment"] == "neocloud"
 
 
 def test_a_search_term_runs_for_one_sender_only(shared_url):
@@ -1130,8 +1144,8 @@ def _search_setup(tmp_path, monkeypatch, cfg, shared_url, sender):
     monkeypatch.setattr(db, "DB_PATH", path)
     db.init_db(path)
     run_cfg = {**cfg, "shared": {"database_url": shared_url, "sender": sender},
-               "alumni_searches": {"roles": ["private credit", "gpu"], "firms": []},
-               "alumni_auto": {**cfg["alumni_auto"], "delay_seconds": 0}}
+               "alumni_auto": {**cfg["alumni_auto"], "delay_seconds": 0,
+                               "terms": ["private credit", "gpu"]}}
     monkeypatch.setattr(ls.time, "sleep", lambda s: None)
     return run_cfg, path
 
@@ -1140,7 +1154,8 @@ def test_two_senders_split_the_terms_and_never_add_a_person_twice(
         tmp_path, monkeypatch, cfg, shared_url):
     from outreach import linkedin_search as ls, shared
     calls = []
-    same = ("https://www.linkedin.com/in/jonty-nobbs", CARD_TEXT)
+    same = ("https://www.linkedin.com/in/jonty-nobbs",
+            "Jonty Nobbs\n2nd degree connection\nGPU Credit Associate at BlackRock\nConnect")
 
     def fake(page, term, auto):
         calls.append(term)

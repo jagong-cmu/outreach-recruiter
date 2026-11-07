@@ -96,7 +96,9 @@ Run `shared-status` to see the claims for each sender.
 
 ### The alumni search
 
-`search-linkedin` opens CMU's alumni page on LinkedIn with each term in `alumni_searches`, and reads the result cards. It keeps a person only when the headline has a term in `alumni_auto.headline_terms` and no term in `alumni_auto.exclude_terms`. The kept people go to your list and to the shared queue at once.
+`search-linkedin` opens CMU's alumni page on LinkedIn with each term in `alumni_searches`, and reads the result cards. It runs the terms in `alumni_auto.terms`. It keeps a person only when the headline has a GPU link (a word in `gpu_terms` or a company in `gpu_firms`) and a word in `finance_terms`, and no word in `exclude_terms`. A finance word alone is not enough. The kept people go to your list and to the shared queue at once.
+
+Few CMU alumni pass this rule. In a test of three terms, 0 of 104 people passed. Most were engineers.
 
 Each search term runs for one sender only. The shared database records who ran each term and when. Nobody runs a term again for `rerun_days` (14 days). Each sender runs at most `daily_searches` terms a day (15). A person already in the queue or the claim list is not added again. To search for more people, add terms to `alumni_searches` in `config.local.yaml`.
 
