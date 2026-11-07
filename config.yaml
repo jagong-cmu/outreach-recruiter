@@ -327,32 +327,43 @@ alumni_auto:
   scrolls: 4                  # "Show more results" clicks or scrolls per term.
   scroll_seconds: 4
   delay_seconds: 45           # Wait between search terms.
-  # A person is kept only when the headline has one of these words.
-  headline_terms: [credit, lending, lender, loan, debt, financing, structured, securitization,
-                   abs, asset-based, asset based, asset-backed, asset backed, project finance,
-                   infrastructure finance, equipment finance, infrastructure, data center, gpu,
-                   compute, cloud, valuation, appraisal, underwriting, origination,
-                   capital markets, treasury, cfo, coreweave, lambda, crusoe, nebius]
+  # The terms that the automatic search runs. Each one names GPUs, compute or a GPU
+  # company, so most results have a GPU link. The manual links on /alumni use
+  # alumni_searches instead.
+  terms: ["GPU financing", "GPU", "compute financing", "AI infrastructure finance",
+          "AI infrastructure", "data center finance", "digital infrastructure", "neocloud",
+          "CoreWeave", "Lambda", "Crusoe", "Nebius", "Fluidstack", "Voltage Park", "NVIDIA"]
+  # A person is kept only when the headline has BOTH a GPU link and a finance word.
+  # The GPU link is a word in gpu_terms or a company in gpu_firms.
+  gpu_terms: [gpu, gpus, compute, ai infrastructure, ai infra, ai data center, data center,
+              data centre, neocloud, accelerator, digital infrastructure]
+  gpu_firms: [coreweave, lambda, crusoe, nebius, fluidstack, voltage park, together ai,
+              nvidia, vast data, applied digital, iren, core scientific]
+  finance_terms: [credit, lending, lender, loan, debt, finance, financing, structured,
+                   securitization, abs, asset-based, asset based, asset-backed, asset backed,
+                   project finance, capital markets, treasury, treasurer, cfo, controller,
+                   underwriting, valuation, appraisal, investment, investor, investing,
+                   origination, residual, depreciation, leasing, fp&a]
   # And the headline has none of these. "@ cmu" and "at carnegie mellon" mean a
   # current student or staff member.
   exclude_terms: [student, intern, new grad, teaching, educator, recruiter, recruiting, talent,
                   human resources, marketing, seeking, looking for, journalist, reporter,
                   trader, quant, "@ carnegie mellon", "at carnegie mellon", "@ cmu", "at cmu",
                   "@cmu"]
-  # The first rule that matches the headline or firm sets the segment.
+  # The first rule that matches the headline sets the segment. A finance person at
+  # a GPU company is "neocloud", so that rule comes first.
   segment_rules:
+    - {has: [coreweave, lambda, crusoe, nebius, fluidstack, voltage park, together ai,
+             nvidia, neocloud, iren, applied digital, core scientific], segment: neocloud}
     - {has: [moody, kbra, fitch, rating], segment: rating_agency}
     - {has: [insurance, insurer, reinsurance], segment: insurer}
     - {has: [appraisal, appraiser], segment: appraiser}
     - {has: [equipment finance, leasing], segment: equipment_finance}
     - {has: [structured, securitization, abs, asset-based, asset based, asset-backed,
-             asset backed, specialty finance],
-       segment: abf_specialty}
-    - {has: [private credit, direct lending, credit, lending, debt, loan, origination],
-       segment: private_credit}
+             asset backed, specialty finance], segment: abf_specialty}
     - {has: [jpmorgan, goldman, morgan stanley, mufg, barclays, citi, bank], segment: bank}
-    - {has: [coreweave, lambda, crusoe, nebius, gpu, cloud, data center, compute,
-             infrastructure], segment: neocloud}
+    - {has: [private credit, direct lending, credit, lending, debt, loan, origination,
+             financing], segment: private_credit}
   default_segment: analyst
 
 # Shown on each prospect page. Ask about the past, not about your idea.

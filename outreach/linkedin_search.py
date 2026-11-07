@@ -39,9 +39,8 @@ def _db(cfg: dict) -> dict:
 
 
 def terms(cfg: dict) -> list[str]:
-    searches = cfg["alumni_searches"]
     seen, out = set(), []
-    for term in list(searches.get("roles") or []) + list(searches.get("firms") or []):
+    for term in cfg["alumni_auto"]["terms"]:
         if term.lower() not in seen:
             seen.add(term.lower())
             out.append(term)
@@ -57,14 +56,17 @@ def parse_card(text: str) -> Optional[dict]:
     return {"name": lines[0], "headline": lines[1] if len(lines) > 1 else ""}
 
 
-def firm_from(headline: str, term: str, firm_terms: list[str]) -> str:
-    """The firm: the search term when it is a firm, else the text after ' at '."""
-    if term in firm_terms:
-        return term
-    m = re.search(r"\s(?:at|@)\s+(.+)$", headline, re.IGNORECASE)
+def firm_from(headline: str, gpu_firms: list[str]) -> str:
+    """The firm: the text after ' at ' or '@', else a GPU company in the headline.
+
+    The search term is not used. A search for "Lambda" also finds people who work
+    on AWS Lambda at Amazon.
+    """
+    m = re.search(r"(?:\s|^)(?:at|@)\s*([^|·•,]+)", headline, re.IGNORECASE)
     if m:
-        return re.split(r"\s[|·•]\s|,\s", m.group(1))[0].strip()
-    return ""
+        return m.group(1).strip()
+    low = headline.lower()
+    return next((f.title() for f in gpu_firms if _has(low, [f])), "")
 
 
 def _has(text: str, words: list[str]) -> bool:
@@ -77,10 +79,20 @@ def _has(text: str, words: list[str]) -> bool:
     return False
 
 
-def fits(headline: str, auto: dict) -> bool:
-    """True when the headline has a useful term and no excluded term."""
+def gpu_link(headline: str, auto: dict) -> bool:
     low = (headline or "").lower()
-    return _has(low, auto["headline_terms"]) and not _has(low, auto["exclude_terms"])
+    return _has(low, auto["gpu_terms"]) or _has(low, auto["gpu_firms"])
+
+
+def fits(headline: str, auto: dict) -> bool:
+    """True when the headline has a GPU link, a finance word, and no excluded word.
+
+    A finance word alone is not enough. "Private Credit Associate at BlackRock"
+    has no link to GPUs, so the search drops it.
+    """
+    low = (headline or "").lower()
+    return (gpu_link(low, auto) and _has(low, auto["finance_terms"])
+            and not _has(low, auto["exclude_terms"]))
 
 
 def segment_for(headline: str, firm: str, auto: dict) -> str:
@@ -95,11 +107,14 @@ def to_prospect(card: dict, url: str, term: str, cfg: dict) -> Optional[dict]:
     auto = cfg["alumni_auto"]
     if not fits(card["headline"], auto):
         return None
-    firm = firm_from(card["headline"], term, cfg["alumni_searches"].get("firms") or [])
+    firm = firm_from(card["headline"], auto["gpu_firms"])
+    # The search term stays out of why_relevant. The qualify step reads that
+    # text, and a term such as "GPU financing" must not make a person look
+    # confirmed when the headline does not say so.
     return {
         "name": card["name"], "title": card["headline"], "firm": firm,
         "segment": segment_for(card["headline"], firm, auto),
-        "why_relevant": f"{card['headline']}. Found in the CMU alumni search for '{term}'.",
+        "why_relevant": f"{card['headline']}. Found in the CMU alumni search on LinkedIn.",
         "linkedin_url": url, "source_url": url, "confidence": "medium", "cmu_link": True,
     }
 
