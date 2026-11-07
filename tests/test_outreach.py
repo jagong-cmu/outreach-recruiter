@@ -1070,3 +1070,120 @@ def test_sender_claims_releases_on_skip_and_respects_the_other(monkeypatch, shar
         shared.mark_sent(conn, "b", lender, url)
     with pytest.raises(linkedin.Taken):
         linkedin._send_one(None, lender, cfg, False, sh)
+
+
+# --- LinkedIn alumni search -------------------------------------------------
+
+CARD_TEXT = ("Jonty Nobbs\n \n2nd degree connection\n· 2nd\n"
+             "Private Credit Associate at BlackRock\nRyan G and 1 other mutual connection\nConnect")
+
+
+def test_parse_card_reads_name_and_headline():
+    from outreach import linkedin_search as ls
+    assert ls.parse_card(CARD_TEXT) == {"name": "Jonty Nobbs",
+                                        "headline": "Private Credit Associate at BlackRock"}
+    assert ls.parse_card("LinkedIn Member\nPrivate Credit") is None
+
+
+def test_firm_comes_from_the_firm_term_or_the_headline():
+    from outreach import linkedin_search as ls
+    assert ls.firm_from("Private Credit Associate at BlackRock", "private credit", []) == "BlackRock"
+    assert ls.firm_from("VP | Credit", "Apollo", ["Apollo"]) == "Apollo"
+    assert ls.firm_from("Credit analyst", "credit", []) == ""
+
+
+@pytest.mark.parametrize("headline,keep", [
+    ("Private Credit Associate at BlackRock", True),
+    ("Software Engineer at Blackstone", False),
+    ("MBA student | Private credit", False),
+    ("Recruiter, Infrastructure Finance", False)])
+def test_headline_filter(cfg, headline, keep):
+    from outreach import linkedin_search as ls
+    assert ls.fits(headline, cfg["alumni_auto"]) is keep
+
+
+@pytest.mark.parametrize("headline,firm,segment", [
+    ("Private Credit Associate", "BlackRock", "private_credit"),
+    ("Analyst, Structured Finance", "Moody's Ratings", "rating_agency"),
+    ("Director, ABS", "Guggenheim", "abf_specialty"),
+    ("Infrastructure Lead", "CoreWeave", "neocloud"),
+    ("Investment Analyst", "Some Fund", "analyst")])
+def test_segment_rules(cfg, headline, firm, segment):
+    from outreach import linkedin_search as ls
+    assert ls.segment_for(headline, firm, cfg["alumni_auto"]) == segment
+
+
+def test_a_search_term_runs_for_one_sender_only(shared_url):
+    from outreach import shared
+    with shared.connect(shared_url) as conn:
+        assert shared.claim_search(conn, "a", "alumni:gpu", 14) is None
+        assert shared.claim_search(conn, "b", "alumni:gpu", 14) == "a"
+        assert shared.claim_search(conn, "a", "alumni:gpu", 14) == "a"   # No rerun either.
+        assert shared.claim_search(conn, "b", "alumni:gpu", -1) is None   # After the gap, yes.
+        shared.release_search(conn, "b", "alumni:gpu")
+        assert shared.claim_search(conn, "a", "alumni:gpu", 14) is None
+
+
+def _search_setup(tmp_path, monkeypatch, cfg, shared_url, sender):
+    from outreach import linkedin_search as ls
+    path = str(tmp_path / f"{sender}.db")
+    monkeypatch.setattr(db, "DB_PATH", path)
+    db.init_db(path)
+    run_cfg = {**cfg, "shared": {"database_url": shared_url, "sender": sender},
+               "alumni_searches": {"roles": ["private credit", "gpu"], "firms": []},
+               "alumni_auto": {**cfg["alumni_auto"], "delay_seconds": 0}}
+    monkeypatch.setattr(ls.time, "sleep", lambda s: None)
+    return run_cfg, path
+
+
+def test_two_senders_split_the_terms_and_never_add_a_person_twice(
+        tmp_path, monkeypatch, cfg, shared_url):
+    from outreach import linkedin_search as ls, shared
+    calls = []
+    same = ("https://www.linkedin.com/in/jonty-nobbs", CARD_TEXT)
+
+    def fake(page, term, auto):
+        calls.append(term)
+        return [same] if term == "private credit" else [same, (
+            "https://www.linkedin.com/in/sam-gpu",
+            "Sam Gpu\n2nd degree connection\nGPU Financing Lead at Lambda\nConnect")]
+    monkeypatch.setattr(ls, "_search_term", fake)
+
+    cfg_a, path_a = _search_setup(tmp_path, monkeypatch, cfg, shared_url, "a")
+    assert ls.run(None, 1, cfg_a) == {"terms": 1, "added": 1, "skipped_terms": 0}
+    cfg_b, path_b = _search_setup(tmp_path, monkeypatch, cfg, shared_url, "b")
+    assert ls.run(None, None, cfg_b) == {"terms": 1, "added": 1, "skipped_terms": 1}
+    assert calls == ["private credit", "gpu"]            # Each term ran once.
+    with shared.connect(shared_url) as conn:
+        assert sorted(p["name"] for p in shared.pull(conn)) == ["Jonty Nobbs", "Sam Gpu"]
+    with db.connect(path_b) as conn:
+        row = dict(db.all_prospects(conn)[0])
+    assert row["name"] == "Sam Gpu" and row["cmu_link"] == 1 and row["fit"] == "confirmed"
+
+
+def test_a_warning_frees_the_search_term(tmp_path, monkeypatch, cfg, shared_url):
+    from outreach import linkedin_search as ls, shared
+
+    def warn(page, term, auto):
+        raise linkedin.Stop("LinkedIn text: unusual activity")
+    monkeypatch.setattr(ls, "_search_term", warn)
+    cfg_a, _ = _search_setup(tmp_path, monkeypatch, cfg, shared_url, "a")
+    with pytest.raises(linkedin.Stop):
+        ls.run(None, 1, cfg_a)
+    with shared.connect(shared_url) as conn:
+        assert shared.claim_search(conn, "b", "alumni:private credit", 14) is None
+
+
+def test_daily_search_limit(tmp_path, monkeypatch, cfg, shared_url):
+    from outreach import linkedin_search as ls
+    monkeypatch.setattr(ls, "_search_term", lambda page, term, auto: [])
+    cfg_a, _ = _search_setup(tmp_path, monkeypatch, cfg, shared_url, "a")
+    cfg_a["alumni_auto"]["daily_searches"] = 1
+    assert ls.run(None, None, cfg_a)["terms"] == 1
+    assert ls.run(None, None, cfg_a)["terms"] == 0
+
+
+def test_sender_uses_the_url_only_for_people_found_on_linkedin(lender):
+    url = "https://www.linkedin.com/in/pat-example"
+    assert linkedin.profile_url({**lender, "linkedin_url": url, "source_url": url}) == url
+    assert linkedin.profile_url({**lender, "linkedin_url": url}) is None

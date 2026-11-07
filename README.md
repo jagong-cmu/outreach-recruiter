@@ -86,7 +86,21 @@ The sender releases a claim only when it skipped the person before Send. After a
    .venv/bin/python cli.py send-linkedin --limit 10
    ```
 
-Run `sync` again when either sender adds prospects. Run `shared-status` to see the claims for each sender.
+6. Run everything automatically. This command syncs the shared queue before each batch, sends the invites, and runs the alumni search when nobody is left to contact. It stops at the deadline or at the first LinkedIn warning.
+
+   ```bash
+   caffeinate -dis .venv/bin/python cli.py send-linkedin --until 2026-11-15T23:00 --search
+   ```
+
+Run `shared-status` to see the claims for each sender.
+
+### The alumni search
+
+`search-linkedin` opens CMU's alumni page on LinkedIn with each term in `alumni_searches`, and reads the result cards. It keeps a person only when the headline has a term in `alumni_auto.headline_terms` and no term in `alumni_auto.exclude_terms`. The kept people go to your list and to the shared queue at once.
+
+Each search term runs for one sender only. The shared database records who ran each term and when. Nobody runs a term again for `rerun_days` (14 days). Each sender runs at most `daily_searches` terms a day (15). A person already in the queue or the claim list is not added again. To search for more people, add terms to `alumni_searches` in `config.local.yaml`.
+
+LinkedIn watches automated search more closely than invites. Keep the daily limit low. The search stops at the first LinkedIn warning, the same as the sender.
 
 ## Daily use
 
@@ -104,8 +118,9 @@ Run `sync` again when either sender adds prospects. Run `shared-status` to see t
 | `import-csv FILE` | Import a CSV. The columns use the same names as the JSON keys. |
 | `run` | Qualify and score all prospects, and check draft lengths. This keeps stages and notes. |
 | `list` | Show the ranked prospects. Use `--segment`, `--stage`, `--min-score`. |
-| `send-linkedin` | Send notes in your Chrome. Use `--dry-run`, `--name`, `--limit`, `--delay`, `--until`. |
+| `send-linkedin` | Send notes in your Chrome. Use `--dry-run`, `--name`, `--limit`, `--delay`, `--until`. Add `--search` to also sync and search. |
 | `gaps` | Show the prospects that have no personal fact. |
+| `search-linkedin` | Run the next CMU alumni search terms in Chrome. Use `--terms`. |
 | `sync` | Push your prospects and contacts to the shared queue, pull the others, then score. |
 | `shared-status` | Show the shared queue size and the claims for each sender. |
 

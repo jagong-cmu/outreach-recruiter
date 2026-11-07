@@ -3,8 +3,9 @@
 Each sender keeps a local SQLite database. This module adds one shared database
 that all senders use. It holds two tables:
 
-  queue   the prospect list. `sync` pushes local prospects and pulls the others.
-  claims  one row for each person that a sender contacts or is about to contact.
+  queue     the prospect list. `sync` and the search push to it.
+  claims    one row for each person that a sender contacts or is about to contact.
+  searches  one row for each LinkedIn search term, with the sender and the time.
 
 The sender claims a person before it opens the profile. The claim is one atomic
 INSERT on a unique key, so only one sender can win it. The keys are the
@@ -40,6 +41,13 @@ SCHEMA = (
         url        TEXT,
         claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""",
+    """CREATE TABLE IF NOT EXISTS searches (
+        key        TEXT PRIMARY KEY,
+        sender     TEXT NOT NULL,
+        status     TEXT NOT NULL,
+        found      INTEGER DEFAULT 0,
+        ran_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )""",
     """CREATE TABLE IF NOT EXISTS queue (
         dedupe_key TEXT PRIMARY KEY,
@@ -211,3 +219,72 @@ def counts(conn: _Conn) -> dict:
                     "WHERE key LIKE ? GROUP BY sender, status", ("name:%",))
     queue = conn.run("SELECT COUNT(*) FROM queue")[0][0]
     return {"queue": queue, "claims": [(s, st, n) for s, st, n in rows]}
+
+
+def _stamp(dt_value) -> str:
+    """The text form that both SQLite and Postgres compare as a time (UTC)."""
+    return dt_value.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def claim_search(conn: _Conn, sender: str, key: str, rerun_days: float) -> Optional[str]:
+    """Claim one search term. Return None on success, or the sender that ran it.
+
+    A term that any sender ran in the last `rerun_days` days stays taken. One
+    atomic statement decides, so two senders cannot both win the same term.
+    """
+    import datetime as dt
+    cutoff = _stamp(dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=rerun_days))
+    now = _stamp(dt.datetime.now(dt.timezone.utc))
+    rows = conn.run(
+        """INSERT INTO searches (key, sender, status, ran_at) VALUES (?, ?, 'running', ?)
+           ON CONFLICT (key) DO UPDATE SET sender = excluded.sender,
+             status = 'running', found = 0, ran_at = excluded.ran_at
+           WHERE searches.ran_at < ?
+           RETURNING sender""",
+        (key, sender, now, cutoff))
+    conn.commit()
+    if rows:
+        return None
+    owner = conn.run("SELECT sender FROM searches WHERE key = ?", (key,))
+    return owner[0][0] if owner else "another sender"
+
+
+def finish_search(conn: _Conn, sender: str, key: str, found: int) -> None:
+    conn.run("UPDATE searches SET status = 'done', found = ? WHERE key = ? AND sender = ?",
+             (found, key, sender))
+    conn.commit()
+
+
+def release_search(conn: _Conn, sender: str, key: str) -> None:
+    """Free a term that this sender could not finish, so it can run again."""
+    conn.run("DELETE FROM searches WHERE key = ? AND sender = ? AND status = 'running'",
+             (key, sender))
+    conn.commit()
+
+
+def searches_today(conn: _Conn, sender: str) -> int:
+    import datetime as dt
+    since = _stamp(dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1))
+    return conn.run("SELECT COUNT(*) FROM searches WHERE sender = ? AND ran_at >= ?",
+                    (sender, since))[0][0]
+
+
+def known_profile_keys(conn: _Conn) -> set[str]:
+    """Profile keys of everyone in the queue or the claim list."""
+    keys = {r[0] for r in conn.run("SELECT key FROM claims WHERE key LIKE ?", ("url:%",))}
+    for (data,) in conn.run("SELECT data FROM queue"):
+        k = url_key(json.loads(data).get("linkedin_url") or "")
+        if k:
+            keys.add(k)
+    return keys
+
+
+def add_to_queue(conn: _Conn, sender: str, person: dict) -> bool:
+    """Add one prospect to the queue. Return False when it is there already."""
+    data = {k: person.get(k) for k in db.FIELDS}
+    key = db.dedupe_key(person["name"], person.get("firm") or "")
+    got = conn.run("""INSERT INTO queue (dedupe_key, data, added_by) VALUES (?, ?, ?)
+                      ON CONFLICT (dedupe_key) DO NOTHING RETURNING dedupe_key""",
+                   (key, json.dumps(data), sender))
+    conn.commit()
+    return bool(got)

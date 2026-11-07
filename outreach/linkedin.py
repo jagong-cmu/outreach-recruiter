@@ -291,6 +291,18 @@ def _attach(p, cdp_url: str):
     return page or ctx.new_page()
 
 
+def profile_url(person: dict) -> Optional[str]:
+    """The known profile URL, when the person was found on LinkedIn itself.
+
+    Research files can hold an old or wrong URL, so those people still go
+    through the name and firm search. The profile heading check runs either way.
+    """
+    url = person.get("linkedin_url") or ""
+    if url and url == person.get("source_url") and shared.url_key(url):
+        return url
+    return None
+
+
 def _shared(sh: Optional[dict], fn, *args):
     """Run one call on the shared database. Return None when none is set."""
     if not sh:
@@ -316,7 +328,7 @@ def _send_one(page, person: dict, cfg: dict, dry_run: bool,
     _claim(sh, person)
     url = None
     try:
-        url = _find_profile(page, person)
+        url = profile_url(person) or _find_profile(page, person)
         _claim(sh, person, url)
         _open_invite(page, person, url)
         _prepare_note(page, person, note, cfg["limits"]["linkedin_note"])
@@ -402,14 +414,35 @@ def seconds_to_midnight(now: Optional[dt.datetime] = None) -> int:
     return int((tomorrow - now).total_seconds())
 
 
-def keep_going(until: dt.datetime, delay: Optional[int] = None) -> int:
+def _search_batch(cfg: dict, terms: int) -> dict:
+    """Run a few alumni search terms in the logged-in Chrome."""
+    from playwright.sync_api import sync_playwright
+    from . import linkedin_search
+    with sync_playwright() as p:
+        return linkedin_search.run(_attach(p, cfg["linkedin"]["cdp_url"]), terms, cfg)
+
+
+def _sync(cfg: dict) -> None:
+    from . import pipeline
+    sh = shared.settings(cfg)
+    if sh:
+        r = pipeline.sync(sh, LOG_PATH)
+        print(f"Sync: pushed {r['queued']}, pulled {r['pulled']}.", flush=True)
+    pipeline.rescore(cfg)
+
+
+def keep_going(until: dt.datetime, delay: Optional[int] = None, search: bool = False) -> int:
     """Send daily until `until`, and pick up new prospects as they arrive.
 
     It obeys the daily limit, and it ends at the first LinkedIn warning. The
-    deadline matters: the note says "this weekend".
+    deadline matters: the note says "this weekend". With `search`, it syncs the
+    shared queue before each batch, and it runs the alumni search when nobody
+    is left to contact.
     """
     cfg = load_config()
     while dt.datetime.now() < until:
+        if search:
+            _sync(cfg)
         with db.connect() as conn:
             room = cfg["linkedin"]["daily_limit"] - db.stage_counts(conn)["sent_today"]
         if room <= 0:
@@ -418,6 +451,14 @@ def keep_going(until: dt.datetime, delay: Optional[int] = None) -> int:
             time.sleep(max(wait, 1))
             continue
         if not targets():
+            if search:
+                try:
+                    found = _search_batch(cfg, 3)
+                except Stop as why:
+                    print(f"Stopped: {why}", flush=True)
+                    return 1
+                if found["added"]:
+                    continue
             print("Queue empty. Checking again in 10 minutes.", flush=True)
             time.sleep(600)
             continue

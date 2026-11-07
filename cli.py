@@ -53,25 +53,11 @@ def cmd_import_csv(args):
 
 def cmd_run(args):
     """Qualify and score every prospect, then check the draft lengths."""
+    from outreach import pipeline
     cfg = load_config()
-    counts: dict[str, int] = {}
-    ready = over = 0
-    with db.connect() as conn:
-        for row in db.all_prospects(conn):
-            p = dict(row)
-            verdict = qualify.qualify(p, cfg)
-            db.set_fit(conn, p["id"], verdict["fit"])
-            counts[verdict["fit"]] = counts.get(verdict["fit"], 0) + 1
-            if verdict["fit"] not in qualify.PASSING:
-                db.delete_score(conn, p["id"])
-                continue
-            result = scoring.score_prospect(p, cfg)
-            db.save_score(conn, p["id"], result["total"], result["breakdown"])
-            ready += 1
-            for m in messages.generate(p, cfg):
-                over += m["over"]
-    print("Fit:", ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
-    print(f"Ready to contact: {ready}. Over length limit: {over}.")
+    r = pipeline.rescore(cfg)
+    print("Fit:", ", ".join(f"{k}={v}" for k, v in sorted(r["counts"].items())))
+    print(f"Ready to contact: {r['ready']}. Over length limit: {r['over']}.")
     missing = missing_identity(cfg)
     if missing:
         print("Emails and long messages have no sign-off. Fill in config.local.yaml: "
@@ -100,12 +86,38 @@ def cmd_send_linkedin(args):
     from outreach import linkedin, shared
     try:
         if args.until:
-            return linkedin.keep_going(dt.datetime.fromisoformat(args.until), args.delay)
+            return linkedin.keep_going(dt.datetime.fromisoformat(args.until), args.delay,
+                                       search=args.search)
         return linkedin.run(limit=args.limit, names=args.name, dry_run=args.dry_run,
                             delay=args.delay)
     except shared.SharedError as err:
         print(f"Stopped: {err}")          # Never send without the shared claims.
         return 1
+
+
+def cmd_search_linkedin(args):
+    """Run the next free alumni search terms in the logged-in Chrome."""
+    from playwright.sync_api import sync_playwright
+    from outreach import linkedin, linkedin_search, shared
+    cfg = load_config()
+    try:
+        with sync_playwright() as p:
+            # Its own tab, so a sender that runs at the same time keeps its tab.
+            ctx = p.chromium.connect_over_cdp(cfg["linkedin"]["cdp_url"]).contexts[0]
+            page = ctx.new_page()
+            try:
+                r = linkedin_search.run(page, args.terms, cfg)
+            finally:
+                page.close()
+    except linkedin.Stop as why:
+        print(f"Stopped: {why}")
+        return 1
+    except shared.SharedError as err:
+        print(f"Stopped: {err}")
+        return 1
+    print(f"Searched {r['terms']} terms. Added {r['added']} people. "
+          f"Terms that another run already did: {r['skipped_terms']}.")
+    return 0
 
 
 def _shared_settings():
@@ -119,30 +131,17 @@ def _shared_settings():
 
 def cmd_sync(args):
     """Push local prospects and contacts to the shared queue, then pull the others."""
-    from outreach import linkedin, shared
+    from outreach import linkedin, pipeline, shared
     try:
         sh = _shared_settings()
         if not sh:
             return 1
-        db.init_db()
-        with db.connect() as conn:
-            rows = [dict(r) for r in db.all_prospects(conn)]
-        log_rows = []
-        if os.path.exists(linkedin.LOG_PATH):
-            with open(linkedin.LOG_PATH, newline="", encoding="utf-8") as fh:
-                log_rows = list(csv.DictReader(fh))
-        with shared.connect(sh["url"]) as conn:
-            pushed = shared.push(conn, sh["sender"], rows, log_rows)
-            people = shared.pull(conn)
+        r = pipeline.sync(sh, linkedin.LOG_PATH)
     except shared.SharedError as err:
         print(f"Stopped: {err}")
         return 1
-    with db.connect() as conn:
-        for person in people:
-            if (person.get("name") or "").strip():
-                db.upsert_prospect(conn, person)
-    print(f"Pushed {pushed['queued']} prospects. New claims for your contacts: "
-          f"{pushed['claimed']}. Pulled {len(people)} prospects.")
+    print(f"Pushed {r['queued']} prospects. New claims for your contacts: "
+          f"{r['claimed']}. Pulled {r['pulled']} prospects.")
     cmd_run(args)
     return 0
 
@@ -305,7 +304,13 @@ def main(argv=None):
     sp.add_argument("--delay", type=int, help="seconds between invites")
     sp.add_argument("--until", help="keep sending daily until this local time, for example "
                                     "2026-11-08T23:00")
+    sp.add_argument("--search", action="store_true",
+                    help="with --until: also run the alumni search and sync the shared queue")
     sp.set_defaults(func=cmd_send_linkedin)
+
+    sp = sub.add_parser("search-linkedin", help="run the next CMU alumni search terms in Chrome")
+    sp.add_argument("--terms", type=int, help="most search terms this run")
+    sp.set_defaults(func=cmd_search_linkedin)
 
     sp = sub.add_parser("sync", help="share your prospects and contacts, and get the others")
     sp.set_defaults(func=cmd_sync)
