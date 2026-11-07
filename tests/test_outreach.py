@@ -1202,3 +1202,20 @@ def test_sender_uses_the_url_only_for_people_found_on_linkedin(lender):
     url = "https://www.linkedin.com/in/pat-example"
     assert linkedin.profile_url({**lender, "linkedin_url": url, "source_url": url}) == url
     assert linkedin.profile_url({**lender, "linkedin_url": url}) is None
+
+
+def test_import_sends_new_prospects_to_the_shared_queue(tmp_path, monkeypatch, shared_url, lender):
+    import json as _json
+    import cli
+    from outreach import config, shared
+    path = str(tmp_path / "t.db")
+    monkeypatch.setattr(db, "DB_PATH", path)
+    monkeypatch.setattr(linkedin, "LOG_PATH", str(tmp_path / "log.csv"))
+    base = dict(config.load_config())
+    monkeypatch.setattr(cli, "load_config",
+                        lambda: {**base, "shared": {"database_url": shared_url, "sender": "a"}})
+    f = tmp_path / "p.json"
+    f.write_text(_json.dumps([lender]))
+    cli.main(["import-research", str(f)])
+    with shared.connect(shared_url) as conn:
+        assert [p["name"] for p in shared.pull(conn)] == ["Pat Example"]
