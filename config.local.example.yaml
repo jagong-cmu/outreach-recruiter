@@ -1,0 +1,20 @@
+# Copy this file to config.local.yaml and fill it in. Git ignores config.local.yaml.
+
+sender:
+  sender_name: "Your Name"
+  sender_email: ""
+  signoff: "Your first name"
+  calendar_url: ""          # Optional booking link for long messages.
+  # Optional. Change the intro in the messages. Each one has an alumni form.
+  # intros:
+  #   short_intro: "I'm a Carnegie Mellon student"
+  #   short_intro_alum: "I'm a fellow Tartan"
+
+limits:
+  linkedin_note: 200        # 300 if you have LinkedIn Premium.
+
+# The shared queue. Get the database URL from the person who runs the database.
+# Each sender uses a different name.
+shared:
+  database_url: "postgresql://USER:PASSWORD@HOST/DB?sslmode=require"
+  sender: "yourname"

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}CMU alumni: GPU Outreach{% endblock %}
+{% block content %}
+
+<h1>CMU alumni</h1>
+<p class="muted">Each link opens CMU's alumni page on LinkedIn in your own account. Add the useful people below. Nothing here automates LinkedIn.</p>
+
+<section class="card top">
+  <h2>Search by role</h2>
+  <div class="chips">{% for label, url in roles %}<a class="chip" href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a>{% endfor %}</div>
+</section>
+
+<section class="card top">
+  <h2>Search by firm</h2>
+  <div class="chips">{% for label, url in firms %}<a class="chip" href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a>{% endfor %}</div>
+</section>
+
+<section class="card top">
+  <h2>Add an alum</h2>
+  <form method="post" action="{{ url_for('add_prospect') }}" class="add-form">
+    <label class="small">Name <input name="name" required></label>
+    <label class="small">Title <input name="title"></label>
+    <label class="small">Firm <input name="firm"></label>
+    <label class="small">Segment
+      <select name="segment">{% for s in segments %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
+    </label>
+    <label class="small">LinkedIn URL <input name="linkedin_url" type="url" required></label>
+    <button type="submit">Add</button>
+  </form>
+</section>
+
+<section class="card top">
+  <h2>CMU alumni in your list ({{ rows | length }})</h2>
+  {% if rows %}
+  <ul class="plain">
+    {% for r in rows %}
+      <li><a href="{{ url_for('prospect', pid=r.id) }}">{{ r.name }}</a>
+        <span class="muted small">{{ r.title or '' }}{% if r.firm %}, {{ r.firm }}{% endif %}</span>
+        <span class="badge {{ r.stage }}">{{ r.stage }}</span></li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted">None yet.</p>{% endif %}
+</section>
+{% endblock %}

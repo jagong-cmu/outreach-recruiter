@@ -1,184 +1,141 @@
-# 📣 Outreach Recruiter
+# GPU Outreach
 
-Find, score, and draft personalized outreach to potential recruits for your
-club's **Outreach Committee** — targeting **incoming CMU freshmen, Class of
-2030** with strong **outreach/community** and **marketing/social-media**
-backgrounds.
+This tool finds the people who work on GPU-backed loans, ranks them, and drafts a message for each channel. It then tracks each conversation. The goal is customer discovery: learn who feels the problem and how they work today.
+
+The dashboard never sends anything. The optional `send-linkedin` command sends connection notes through your own logged-in Chrome, and it stops at the first LinkedIn warning. It never handles your password or solves a check. LinkedIn does not allow this automation, so your account carries the risk.
 
 ```
- data source ──► [ candidate store ] ──► ATS scoring ──► email drafts ──► dashboard
- (LinkedIn /                (SQLite)        (0–100)      (for review)     (approve)
-  CSV / form)
+research JSON / CSV -> qualify -> score -> draft per channel -> dashboard -> you send -> track replies
 ```
-
-The scoring engine, draft generator, and dashboard are **source-agnostic** — they
-work the same whether candidates come from the LinkedIn scraper, a CSV, or an
-opt-in form.
-
----
-
-## ⚠️ Read before scraping LinkedIn
-
-You asked to scrape LinkedIn with Scrapy, authenticated as you (Option A). The
-spider is built (`recruiter/scraper/`) and renders pages in a real headless
-browser (Playwright) using your own `li_at` session cookie — but be clear-eyed:
-
-- Scraping LinkedIn **violates its Terms of Service** and, even using your own
-  account, can get it **restricted or banned**. That's the trade-off you accept.
-- Most Class-of-2030 students are **minors** — extra reason to keep volumes small
-  and outreach respectful.
-- Two ways to get candidates: **auto-discovery** (`discover` crawls CMU's alumni
-  page to find profiles for you — convenient but the most ban-prone step), or a
-  **file of profile URLs** you supply. The scrape step is **polite** either way
-  (one request at a time, several seconds apart, obeys robots.txt).
-- It does **not** rotate proxies, randomize fingerprints, or solve CAPTCHAs. If
-  LinkedIn challenges your session, refresh the cookie or switch to a CSV.
-
-**Recommended alternative:** collect candidates via an **opt-in interest form**
-(share in the CMU admit Discord/GroupMe) or a **CSV** — you get clean, consented
-data *with* emails, and everything downstream is identical. Use `import-csv`.
-
----
 
 ## Setup
 
+1. Create the environment.
+
+   ```bash
+   python3 -m venv .venv
+   .venv/bin/pip install -r requirements.txt
+   ```
+
+2. Add your name to `config.local.yaml`. Git ignores this file. Short messages work without it.
+
+3. Import the prospects, then qualify and score them.
+
+   ```bash
+   .venv/bin/python cli.py import-research data/prospects.json
+   .venv/bin/python cli.py run
+   ```
+
+4. Start the dashboard at http://127.0.0.1:5000.
+
+   ```bash
+   .venv/bin/python app.py
+   ```
+
+## Two senders: the shared queue
+
+Two people can send from two LinkedIn accounts and never contact the same person. One shared Postgres database holds the prospect queue and a claim list. Before the sender opens a profile, it claims the person. Only one sender can hold a claim, so the other sender skips that person. The sender claims the profile URL too, so a different firm spelling still matches.
+
+The sender releases a claim only when it skipped the person before Send. After a crash or a warning, the claim stays. If it cannot reach the database, it stops and sends nothing.
+
+### First sender: make the database once
+
+1. Make a free Postgres database on [Neon](https://neon.tech) or [Supabase](https://supabase.com). Copy its connection string.
+2. Add the `shared` block to `config.local.yaml`. Use the example in `config.local.example.yaml`.
+3. Run `sync`. It pushes your prospects to the queue and claims everyone you already contacted.
+
+   ```bash
+   .venv/bin/python cli.py sync
+   ```
+
+4. Send the connection string to the second sender in a private message. Do not put it in the repo.
+
+### Second sender: set up
+
+1. Clone the repo and make the environment.
+
+   ```bash
+   git clone https://github.com/jagong-cmu/outreach-recruiter.git
+   cd outreach-recruiter
+   python3 -m venv .venv
+   .venv/bin/pip install -r requirements.txt
+   ```
+
+2. Copy the example config. Fill in your name, the connection string and a sender name that is not the first sender's.
+
+   ```bash
+   cp config.local.example.yaml config.local.yaml
+   ```
+
+3. Get the queue. This also qualifies and scores the prospects.
+
+   ```bash
+   .venv/bin/python cli.py sync
+   ```
+
+4. Start Chrome for the sender. Log in to LinkedIn by hand in the new window. Keep the window open.
+
+   ```bash
+   ./scripts/start-chrome.sh
+   ```
+
+5. Do a dry run first. It stops before Send.
+
+   ```bash
+   .venv/bin/python cli.py send-linkedin --dry-run --limit 2
+   .venv/bin/python cli.py send-linkedin --limit 10
+   ```
+
+Run `sync` again when either sender adds prospects. Run `shared-status` to see the claims for each sender.
+
+## Daily use
+
+1. Open the dashboard and sort by score.
+2. Open a prospect. Read the source. Check the role if the page warns you.
+3. Copy the message and send it yourself.
+4. Click "I sent this".
+5. Update the stage when the person replies. Write your call notes on the same page.
+
+## Commands
+
+| Command | Action |
+|---|---|
+| `import-research FILE` | Import a JSON array of prospects. |
+| `import-csv FILE` | Import a CSV. The columns use the same names as the JSON keys. |
+| `run` | Qualify and score all prospects, and check draft lengths. This keeps stages and notes. |
+| `list` | Show the ranked prospects. Use `--segment`, `--stage`, `--min-score`. |
+| `send-linkedin` | Send notes in your Chrome. Use `--dry-run`, `--name`, `--limit`, `--delay`, `--until`. |
+| `gaps` | Show the prospects that have no personal fact. |
+| `sync` | Push your prospects and contacts to the shared queue, pull the others, then score. |
+| `shared-status` | Show the shared queue size and the claims for each sender. |
+
+## Prospect fields
+
+`name, title, firm, segment, why_relevant, hook, opener, topic, linkedin_url, x_handle, email, source_url, source_date, confidence, cmu_link`
+
+- `hook` is a public fact about the person.
+- `topic` fills the "learn how ____" blank for one person. Without it, the rules in `config.yaml` choose a topic from the title and the segment.
+- `opener` is an optional personal fact. Long messages use it. The LinkedIn note does not, because of the length limit.
+- `source_url` is required. A prospect without a source is blocked.
+
+## Rules in the code
+
+- **Fit:** One sentence must link the person to both an asset term and a finance term. See `outreach/qualify.py`.
+- **Do not contact:** Competitors and journalists get no drafts. Change this list in `config.yaml`.
+- **Frame:** Each message says that you are a CMU student who builds in GPU financing and wants to learn. The templates do not pitch, and they do not claim customers, pilots or YC backing. A test checks this.
+- **Connection note:** The note is the founder's exact wording in lower case. Only the name changes, and alumni get "I'm a fellow Tartan". Long messages carry a checked fact for the segment.
+- **Channels:** `templates.enabled_channels` sets the drafts that show. Today it is the LinkedIn connection note only.
+- **Calendar:** Set `calendar_url` in `config.local.yaml`. Every message carries the link.
+- **CMU alumni:** The dashboard page `/alumni` has search links for your own LinkedIn account and a form to add people. Alumni get a warmer intro and a score bonus.
+- **Timing:** The interview line comes from `interview_date`. It changes after the interview.
+- **Length:** The LinkedIn note limit is 200 characters. Set it to 300 if you have Premium.
+
+## Private data
+
+The GitHub repo is public. Git ignores `data/`, `config.local.yaml` and the database. Keep prospect data and your pitch in those places.
+
+## Tests
+
 ```bash
-pip install -r requirements.txt
-playwright install chromium     # one-time: browser for authenticated scraping
+.venv/bin/python -m pytest -q
 ```
-
-## Quick start (with fictional sample data)
-
-```bash
-python cli.py init           # create recruiter.db
-python cli.py load-sample    # load fictional test candidates
-python cli.py verify         # confirm each is CMU class of 2030 (see below)
-python cli.py score          # ATS-score the verified candidates only
-python cli.py draft          # generate email drafts for matches
-python app.py                # dashboard at http://127.0.0.1:5000
-```
-
-(`score` runs verification automatically too — the separate `verify` step just
-lets you inspect the verdicts first with `python cli.py verify --verbose`.)
-
-## Using your own data
-
-**CSV** (columns: `name, headline, location, profile_url, email, grad_year, school, raw_text`):
-```bash
-python cli.py import-csv people.csv
-python cli.py score && python cli.py draft
-```
-
-**LinkedIn — authenticated, using your own session** (read the caveats above):
-
-The spider renders pages in a real headless browser (Playwright) and reuses
-*your* logged-in session via the `li_at` cookie. No password is entered or stored.
-
-First, copy your session cookie from a browser where you're logged in:
-Chrome → DevTools (⌥⌘I) → Application → Storage → Cookies →
-`https://www.linkedin.com` → click `li_at` → copy its Value.
-
-```bash
-export LI_AT="<your li_at value>"
-```
-
-**Auto-discovery (no URLs needed) — find candidates for you:**
-```bash
-python cli.py discover --show --scrape   # find CMU '30 profiles, then scrape them
-python cli.py verify --verbose           # who actually checks out as CMU '30
-python cli.py score && python cli.py draft
-```
-`discover` opens CMU's alumni page in your session, searches "Class of 2030",
-scrolls, and collects profile links (capped by `discovery.max_profiles` in
-config). `--show` opens a visible browser so you can solve any CAPTCHA; `--scrape`
-chains straight into scraping. ⚠️ This is the most ban-prone, most fragile step —
-see the discovery warning in `recruiter/discover.py`. Some runs return few/zero.
-
-**Or, scrape a list of URLs you already have:**
-```bash
-# one LinkedIn profile URL per line in urls.txt
-python cli.py scrape urls.txt
-python cli.py verify --verbose
-python cli.py score && python cli.py draft
-```
-
-If the cookie expires or LinkedIn challenges the session, you'll see an
-auth/checkpoint warning — refresh the cookie, or switch to `import-csv`. The
-experience selectors are best-effort and may need tweaking when LinkedIn changes
-its page markup.
-
-## Review & send
-
-Open the dashboard, review each candidate's **score breakdown** and **draft**,
-click **Approve** / **Reject**, then **Export approved CSV** for a mail merge
-(Gmail "Multi-send", a mail-merge add-on, etc.). **Nothing is ever sent
-automatically** — you stay in control of every email.
-
----
-
-## Verification — "is this actually a CMU Class of 2030 student?"
-
-Naively checking "does the page mention Carnegie Mellon?" and "does it mention
-2030?" produces **false positives**: a LinkedIn profile page also contains
-"People also viewed", suggested profiles, and the person's feed — so the school
-and the year can come from two *different* people and still both appear.
-
-`recruiter/verification.py` fixes this by requiring CMU and 2030 to **co-occur in
-the same education entry** (or the person's own headline). Each candidate gets a
-status, shown as a badge in the dashboard and a banner on their detail page:
-
-| status       | meaning                                                        | emailed? |
-|--------------|----------------------------------------------------------------|----------|
-| `verified`   | an Education entry lists CMU **and** an expected grad year 2030 | ✓ yes    |
-| `headline`   | the person's headline states CMU + 2030 (e.g. "CMU '30")       | ✓ yes    |
-| `provided`   | a CSV/form import supplied the fields; nothing to cross-check   | ✓ yes    |
-| `mismatch`   | CMU but a different year, or class-of-2030 at another school    | ✗ no     |
-| `unverified` | no trustworthy CMU-class-of-2030 evidence on the profile        | ✗ no     |
-
-Only `verified` / `headline` / `provided` candidates get scored and drafted.
-Run `python cli.py verify --verbose` to see exactly why anyone was rejected.
-
-The scraper feeds this by parsing the **Education section specifically** (anchored
-on LinkedIn's `id="education"` block) rather than the whole page — that scoping is
-what keeps sidebar/feed content out of the decision.
-
-## Tuning the scoring
-
-Everything lives in `config.yaml`:
-
-- `target` — grad year + school keywords used to filter candidates.
-- `scoring.categories` — keyword → points dictionaries for **outreach** and
-  **marketing** (each capped at its `weight`; both default to 50, summing to 100).
-- `scoring.bonuses` — additive bonuses (e.g. leadership).
-- `email` — subject/body template with `{first_name}`, `{org}`, `{highlights}`, etc.
-- `club` — your name, org, and one-line pitch (used in drafts).
-
-Each score ships with the exact keywords that earned it, shown in the dashboard,
-so you can see *why* someone ranked where they did and tune accordingly.
-
-## Project layout
-
-```
-config.yaml                 all tunables (club, target, scoring, email)
-cli.py                      orchestration: init / import / scrape / score / draft / list
-app.py                      Flask review dashboard
-recruiter/
-  config.py                 config loader
-  db.py                     SQLite store (candidates / scores / drafts)
-  discover.py               auto-find CMU '30 profiles on LinkedIn (Playwright)
-  verification.py           confirms CMU class of 2030 (no false positives)
-  scoring.py                ATS scoring engine (transparent, keyword-based)
-  email_gen.py              personalized draft generator
-  sample_data.py            fictional test candidates
-  scraper/
-    linkedin_spider.py      Scrapy spider (+ honest caveats)
-    pipelines.py            writes scraped items into the store
-templates/ static/          dashboard UI
-```
-
-## Legal / ethical note
-
-Cold-emailing people (especially minors) carries real obligations — see
-**CAN-SPAM** (identify yourself, honor opt-outs, no deception). Prefer
-opt-in/consented data, keep volumes sane, always include a way to opt out, and
-don't store more personal data than you need.
